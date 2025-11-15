@@ -1,7 +1,7 @@
 package com.marine.management.shared.config;
 
 import com.marine.management.modules.auth.infrastructure.JwtUtil;
-import com.marine.management.modules.users.domain.UserRepository;
+import com.marine.management.modules.users.infrastructure.UserRepository;
 import com.marine.management.shared.kernel.security.Role;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -63,8 +63,14 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource(){
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(Arrays.asList("*")); //frontend domain adres (örneğin https://marineapp.com)
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+      //  configuration.setAllowedOriginPatterns(Arrays.asList("*")); //frontend domain adres (örneğin https://marineapp.com)
+        configuration.setAllowedOrigins(Arrays.asList(
+                "http://localhost:4200",  // Angular development
+                "https://localhost:4200", // HTTPS için
+                "http://127.0.0.1:4200"   // Alternatif localhost
+        ));
+
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);
 

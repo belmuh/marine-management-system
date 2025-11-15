@@ -1,7 +1,7 @@
 package com.marine.management.modules.users.application;
 
 import com.marine.management.modules.users.domain.User;
-import com.marine.management.modules.users.domain.UserRepository;
+import com.marine.management.modules.users.infrastructure.UserRepository;
 import com.marine.management.shared.exceptions.UserNotFoundException;
 import com.marine.management.shared.exceptions.UserRegistrationException;
 import com.marine.management.shared.exceptions.UserUpdateException;

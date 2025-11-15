@@ -1,12 +1,12 @@
 package com.marine.management.modules.auth.application;
 
-import com.marine.management.modules.auth.domain.AuthDomainService;
 import com.marine.management.modules.auth.domain.AuthResult;
+import com.marine.management.modules.auth.domain.Authentication;
 import com.marine.management.modules.auth.domain.LoginCommand;
 import com.marine.management.modules.auth.infrastructure.JwtUtil;
 import com.marine.management.modules.auth.presentation.UserResponse;
 import com.marine.management.modules.users.domain.User;
-import com.marine.management.modules.users.domain.UserRepository;
+import com.marine.management.modules.users.infrastructure.UserRepository;
 import com.marine.management.shared.exceptions.AuthenticationFailedException;
 import com.marine.management.shared.exceptions.UnauthorizedAccessException;
 import com.marine.management.shared.exceptions.UserNotFoundException;
@@ -19,27 +19,35 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     private final UserRepository userRepository;
-    private final AuthDomainService authDomainService;
     private final JwtUtil jwtUtil;
+    private final PasswordEncoder passwordEncoder;
 
     public AuthService(UserRepository userRepository,
-                       AuthDomainService authDomainService,
-                       JwtUtil jwtUtil) {
+                       JwtUtil jwtUtil,
+                       PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
-        this.authDomainService = authDomainService;
         this.jwtUtil = jwtUtil;
+        this.passwordEncoder = passwordEncoder;
+    }
+
+
+    public boolean authenticate(User user, String inputPassword) {
+        if (user == null){
+            return false;
+        }
+        return user.credentialsMatch(inputPassword, passwordEncoder) && Authentication.canGenerateTokenForUser(user);
     }
 
     public AuthResult login(LoginCommand command){
         User user = findUserByUsernameOrThrow(command.username());
 
-        boolean authenticated = authDomainService.authenticateUser(user, command.password());
+        boolean authenticated = authenticate(user, command.password());
 
         if (!authenticated) {
             throw new AuthenticationFailedException("Invalid credentials");
         }
 
-        if (!authDomainService.canGenerateTokenForUser(user)){
+        if (!Authentication.canGenerateTokenForUser(user)){
             throw new UnauthorizedAccessException("User cannot generate token");
         }
 
@@ -66,4 +74,5 @@ public class AuthService {
     private User findUserByUsernameOrThrow(String username){
         return userRepository.findByUsername(username).orElseThrow(() -> UserNotFoundException.withUsername(username));
     }
+
 }

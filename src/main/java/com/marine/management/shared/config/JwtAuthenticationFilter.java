@@ -1,7 +1,7 @@
 package com.marine.management.shared.config;
 
 import com.marine.management.modules.auth.infrastructure.JwtUtil;
-import com.marine.management.modules.users.domain.UserRepository;
+import com.marine.management.modules.users.infrastructure.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

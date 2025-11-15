@@ -2,6 +2,7 @@ package com.marine.management.modules.users.domain;
 
 import com.marine.management.shared.kernel.security.Role;
 import jakarta.persistence.*;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -81,8 +82,8 @@ public class User {
         return role.isAdmin();
     }
 
-    public boolean credentialsMatch(String inputPassword){
-        return this.password.equals(inputPassword);
+    public boolean credentialsMatch(String inputPassword, PasswordEncoder encoder) {
+         return encoder.matches(inputPassword, this.password);
     }
 
     public void updateProfile(String newUsername, String newEmail){
