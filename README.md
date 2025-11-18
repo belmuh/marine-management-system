@@ -382,16 +382,15 @@ For questions or support, please contact the development team.
   
 ## 🎯 About This Project
 
-This project started as a simple Excel spreadsheet for tracking marine operation finances. Recognizing the need for a more robust, scalable, and secure solution, it was transformed into a full-featured Spring Boot application.
+his project started as a simple Excel spreadsheet for tracking marine operation finances and evolved into a full-featured Spring Boot application following agile development principles.
 
-**Development Philosophy:**
-- Built as an MVP to demonstrate core financial management capabilities
-- Some features (like comprehensive income tracking) are included as foundational elements for future expansion
-- Actively evolving based on real-world marine operation needs
-- Focus on clean architecture and maintainable code
+**Development Approach:**
+- **MVP-first strategy**: Core functionality prioritized for rapid deployment and user feedback
+- **Iterative development**: Features are built incrementally, refined based on real-world usage
+- **User-driven evolution**: Frontend implementation comes first to validate workflows, followed by backend optimization and refactoring
+- **Practical learning**: Some modules (like income tracking) serve as learning grounds for exploring Spring Boot best practices
 
-This is a working prototype that showcases modern software development practices while addressing practical business requirements in the marine industry.
-
+The project demonstrates modern software development practices while addressing real business needs in the marine industry. It's designed to be maintainable, scalable, and ready for continuous improvement based on user feedback.
 
 ## 🛣️ Roadmap
 
