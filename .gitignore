@@ -29,5 +29,20 @@ build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 
+### macOS ###
+.DS_Store
+.AppleDouble
+.LSOverride
+
+### Application ###
+uploads/
+logs/
+*.log
+
+### Sensitive Files ###
+application-local.properties
+application-dev.properties
+
 ### VS Code ###
 .vscode/
+src/main/resources/application.properties
