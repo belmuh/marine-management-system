@@ -382,7 +382,7 @@ For questions or support, please contact the development team.
   
 ## 🎯 About This Project
 
-his project started as a simple Excel spreadsheet for tracking marine operation finances and evolved into a full-featured Spring Boot application following agile development principles.
+This project started as a simple Excel spreadsheet for tracking marine operation finances and evolved into a full-featured Spring Boot application following agile development principles.
 
 **Development Approach:**
 - **MVP-first strategy**: Core functionality prioritized for rapid deployment and user feedback
