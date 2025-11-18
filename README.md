@@ -373,11 +373,25 @@ For questions or support, please contact the development team.
 ## 🔄 Version History
 
 - **v1.0.0** - Initial release
-    - User authentication and authorization
-    - Financial category management
-    - Financial entry tracking
-    - File attachment support
-    - Dashboard analytics
+-
+  - User authentication and authorization
+  - Financial category management
+  - Financial entry tracking
+  - File attachment support
+  - Dashboard analytics
+  
+## 🎯 About This Project
+
+This project started as a simple Excel spreadsheet for tracking marine operation finances. Recognizing the need for a more robust, scalable, and secure solution, it was transformed into a full-featured Spring Boot application.
+
+**Development Philosophy:**
+- Built as an MVP to demonstrate core financial management capabilities
+- Some features (like comprehensive income tracking) are included as foundational elements for future expansion
+- Actively evolving based on real-world marine operation needs
+- Focus on clean architecture and maintainable code
+
+This is a working prototype that showcases modern software development practices while addressing practical business requirements in the marine industry.
+
 
 ## 🛣️ Roadmap
 
