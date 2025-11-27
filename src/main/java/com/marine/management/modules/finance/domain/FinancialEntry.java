@@ -1,5 +1,6 @@
 package com.marine.management.modules.finance.domain;
 
+import com.marine.management.modules.finance.domain.model.Money;
 import com.marine.management.modules.users.domain.User;
 import com.marine.management.shared.kernel.security.Role;
 import jakarta.persistence.*;

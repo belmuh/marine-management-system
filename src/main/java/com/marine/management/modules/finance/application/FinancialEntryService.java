@@ -1,8 +1,10 @@
 package com.marine.management.modules.finance.application;
 
 import com.marine.management.modules.finance.domain.*;
+import com.marine.management.modules.finance.domain.model.Money;
 import com.marine.management.modules.finance.infrastructure.FinancialCategoryRepository;
 import com.marine.management.modules.finance.infrastructure.FinancialEntryRepository;
+import com.marine.management.modules.finance.presentation.dto.reports.*;
 import com.marine.management.modules.users.domain.User;
 import com.marine.management.shared.exceptions.EntryNotFoundException;
 import org.springframework.data.domain.Page;
@@ -12,9 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.IntStream;
 
 @Service
 @Transactional(readOnly = true)
@@ -298,19 +299,6 @@ public class FinancialEntryService {
     }
 
     // RECORD
-    public record DashboardSummary(
-            BigDecimal totalIncome,
-            BigDecimal totalExpense,
-            BigDecimal balance,
-            long incomeCount,
-            long expenseCount
-    ) {
-        public boolean isProfit() {
-            return balance.compareTo(BigDecimal.ZERO) > 0;
-        }
 
-        public boolean isLoss() {
-            return balance.compareTo(BigDecimal.ZERO) < 0;
-        }
-    }
+
 }

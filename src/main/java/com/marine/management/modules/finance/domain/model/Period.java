@@ -1,19 +1,55 @@
-package com.marine.management.modules.finance.domain.valueObjects;
+package com.marine.management.modules.finance.domain.model;
 
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 
-public record Period(LocalDate start, LocalDate end) {
+public record Period(LocalDate startDate, LocalDate endDate) {
+
     public Period {
-        if (start.isAfter(end)) {
-            throw new IllegalArgumentException("Start must be before end");
-        }
+        validatePeriod(startDate, endDate);
+    }
+
+    public static Period ofYear(int year) {
+        return new Period(
+                LocalDate.of(year, 1, 1),
+                LocalDate.of(year, 12, 31)
+        );
+    }
+
+    public static Period ofFirstHalf(int year) {
+        return new Period(
+                LocalDate.of(year, 1, 1),
+                LocalDate.of(year, 6, 30)
+        );
+    }
+
+    public static Period ofSecondHalf(int year) {
+        return new Period(
+                LocalDate.of(year, 7, 1),
+                LocalDate.of(year, 12, 31)
+        );
     }
 
     public int getYear() {
-        return start.getYear();
+        return startDate.getYear();
     }
 
-    public boolean isFullYear() {
-        return start.getMonthValue() == 1 && end.getMonthValue() == 12;
+    public long getDaysCount() {
+        return ChronoUnit.DAYS.between(startDate, endDate) + 1;
+    }
+
+    public boolean contains(LocalDate date) {
+        return !date.isBefore(startDate) && !date.isAfter(endDate);
+    }
+
+    private static void validatePeriod(LocalDate start, LocalDate end) {
+        if (start == null || end == null) {
+            throw new IllegalArgumentException("Period dates cannot be null");
+        }
+        if (start.isAfter(end)) {
+            throw new IllegalArgumentException(
+                    "Start date must be before or equal to end date"
+            );
+        }
     }
 }

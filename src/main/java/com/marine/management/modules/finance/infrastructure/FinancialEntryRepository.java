@@ -64,7 +64,9 @@ public interface FinancialEntryRepository extends JpaRepository<FinancialEntry, 
     );
 
     // Category-based totals (flexible - works for both income and expense)
-    @Query("SELECT e.category.name as categoryName, SUM(e.baseAmount.amount) as total " +
+    @Query("SELECT e.category.name as categoryName, " +
+            "SUM(e.baseAmount.amount) as total, " +
+            "COUNT(e.id) as entryCount " +
             "FROM FinancialEntry e " +
             "WHERE e.entryType = :entryType AND e.entryDate BETWEEN :start AND :end " +
             "GROUP BY e.category.name " +
@@ -85,13 +87,14 @@ public interface FinancialEntryRepository extends JpaRepository<FinancialEntry, 
     }
 
     // Monthly totals for charts
-    @Query("SELECT FUNCTION('YEAR', e.entryDate) as year, " +
-            "FUNCTION('MONTH', e.entryDate) as month, " +
+    @Query("SELECT EXTRACT(YEAR FROM e.entryDate) as year, " +
+            "EXTRACT(MONTH FROM e.entryDate) as month, " +
             "e.entryType as entryType, " +
-            "SUM(e.baseAmount.amount) as total " +
+            "SUM(e.baseAmount.amount) as total, " +
+            "COUNT(e.id) as entryCount " +
             "FROM FinancialEntry e " +
             "WHERE e.entryDate BETWEEN :start AND :end " +
-            "GROUP BY FUNCTION('YEAR', e.entryDate), FUNCTION('MONTH', e.entryDate), e.entryType " +
+            "GROUP BY EXTRACT(YEAR FROM e.entryDate), EXTRACT(MONTH FROM e.entryDate), e.entryType " +
             "ORDER BY year, month")
     List<MonthlyTotalProjection> findMonthlyTotals(
             @Param("start") LocalDate start,
@@ -129,6 +132,45 @@ public interface FinancialEntryRepository extends JpaRepository<FinancialEntry, 
             Pageable pageable
     );
 
+    // REPORTS
+    // Category breakdown by month
+    @Query("SELECT e.category.name as categoryName, " +
+            "EXTRACT(MONTH FROM e.entryDate) as month, " +
+            "SUM(e.baseAmount.amount) as total " +
+            "FROM FinancialEntry e " +
+            "WHERE e.entryType = :entryType " +
+            "AND EXTRACT(YEAR FROM e.entryDate) = :year " +
+            "GROUP BY e.category.name, EXTRACT(MONTH FROM e.entryDate) " +
+            "ORDER BY categoryName, month")
+    List<CategoryMonthBreakdownProjection> findCategoryMonthBreakdown(
+            @Param("entryType") EntryType entryType,
+            @Param("year") int year
+    );
+
+    // Monthly income/expense totals for a year
+    @Query("SELECT EXTRACT(MONTH FROM e.entryDate) as month, " +
+            "e.entryType as entryType, " +
+            "SUM(e.baseAmount.amount) as total " +
+            "FROM FinancialEntry e " +
+            "WHERE EXTRACT(YEAR FROM e.entryDate) = :year " +
+            "GROUP BY EXTRACT(MONTH FROM e.entryDate), e.entryType " +
+            "ORDER BY month")
+    List<MonthlyIncomeExpenseProjection> findMonthlyIncomeExpense(
+            @Param("year") int year
+    );
+
+    interface CategoryMonthBreakdownProjection {
+        String getCategoryName();
+        Integer getMonth();
+        BigDecimal getTotal();
+    }
+
+    interface MonthlyIncomeExpenseProjection {
+        Integer getMonth();
+        EntryType getEntryType();
+        BigDecimal getTotal();
+    }
+
     // STATISTICS
 
     // Count by type and date range
@@ -158,6 +200,7 @@ public interface FinancialEntryRepository extends JpaRepository<FinancialEntry, 
     interface CategoryTotalProjection {
         String getCategoryName();
         BigDecimal getTotal();
+        Long getEntryCount();
     }
 
     interface MonthlyTotalProjection {
@@ -165,5 +208,6 @@ public interface FinancialEntryRepository extends JpaRepository<FinancialEntry, 
         Integer getMonth();
         EntryType getEntryType();
         BigDecimal getTotal();
+        Long getEntryCount();
     }
 }

@@ -31,6 +31,9 @@ public class User {
     @Column(nullable = false)
     private Role role = Role.USER;
 
+    @Column(nullable = false)
+    private boolean isActive = true;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
@@ -67,6 +70,14 @@ public class User {
 
     public static User createWithHashedPassword(String username, String email, String hashedPassword, Role role) {
         return new User(username, email, hashedPassword, role);
+    }
+
+    public void activate() {
+        this.isActive = true;
+    }
+
+    public void deactivate() {
+        this.isActive = false;
     }
     // === DOMAIN BUSINESS METHODS === (DDD Lite)
 
@@ -140,6 +151,10 @@ public class User {
 
     public Role getRole() {
         return role;
+    }
+
+    public boolean isActive() {
+        return isActive;
     }
 
     String getPassword() {

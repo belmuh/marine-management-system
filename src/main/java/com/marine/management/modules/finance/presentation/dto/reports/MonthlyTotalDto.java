@@ -1,4 +1,10 @@
 package com.marine.management.modules.finance.presentation.dto.reports;
 
-public class MonthlyTotalDto {
-}
+import java.math.BigDecimal;
+
+public record MonthlyTotalDto(
+        int month,
+        BigDecimal totalIncome,
+        BigDecimal totalExpense,
+        BigDecimal cumulative
+) {}

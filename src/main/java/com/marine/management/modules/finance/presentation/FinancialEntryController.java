@@ -5,9 +5,12 @@ import com.marine.management.modules.finance.application.FinancialEntryService;
 import com.marine.management.modules.finance.domain.EntryType;
 import com.marine.management.modules.finance.domain.FinancialEntry;
 import com.marine.management.modules.finance.domain.FinancialEntryAttachment;
-import com.marine.management.modules.finance.domain.Money;
+import com.marine.management.modules.finance.domain.model.Money;
 import com.marine.management.modules.finance.infrastructure.FinancialEntryRepository;
 import com.marine.management.modules.finance.presentation.dto.EntryResponseDto;
+import com.marine.management.modules.finance.presentation.dto.reports.AnnualBreakdownDto;
+import com.marine.management.modules.finance.presentation.dto.reports.DashboardSummary;
+import com.marine.management.modules.finance.presentation.dto.reports.PeriodBreakdownDto;
 import com.marine.management.modules.users.domain.User;
 import com.marine.management.shared.exceptions.EntryNotFoundException;
 import jakarta.validation.Valid;
@@ -262,14 +265,14 @@ public class FinancialEntryController {
     // ============================================
 
     @GetMapping("/dashboard/summary")
-    public ResponseEntity<FinancialEntryService.DashboardSummary> getDashboardSummary(
+    public ResponseEntity<DashboardSummary> getDashboardSummary(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
     ) {
         LocalDate start = startDate != null ? startDate : LocalDate.now().minusMonths(1);
         LocalDate end = endDate != null ? endDate : LocalDate.now();
 
-        FinancialEntryService.DashboardSummary summary =
+        DashboardSummary summary =
                 entryService.getDashboardSummary(start, end);
 
         return ResponseEntity.ok(summary);
@@ -317,6 +320,8 @@ public class FinancialEntryController {
     ) {
         return ResponseEntity.ok(entryService.getMonthlyTotals(startDate, endDate));
     }
+
+
 
     // ATTACHMENT
 

@@ -1,7 +1,9 @@
 package com.marine.management.modules.users.application;
 
+import com.marine.management.modules.finance.domain.FinancialCategory;
 import com.marine.management.modules.users.domain.User;
 import com.marine.management.modules.users.infrastructure.UserRepository;
+import com.marine.management.shared.exceptions.CategoryNotFoundException;
 import com.marine.management.shared.exceptions.UserNotFoundException;
 import com.marine.management.shared.exceptions.UserRegistrationException;
 import com.marine.management.shared.exceptions.UserUpdateException;
@@ -103,6 +105,20 @@ public class UserService {
     }
 
     @Transactional
+    public User activate(UUID id) {
+        User user = getByIdOrThrow(id);
+        user.activate();
+        return user;
+    }
+
+    @Transactional
+    public User deactivate(UUID id) {
+        User user = getByIdOrThrow(id);
+        user.deactivate();
+        return user;
+    }
+
+    @Transactional
     public void deleteUser(UUID userId){
         User user = findUserOrThrow(userId);
         userRepository.delete(user);
@@ -184,5 +200,9 @@ public class UserService {
 
     public boolean isEmailAvailable(String email){
         return !userRepository.existsByEmail(email);
+    }
+
+    private User getByIdOrThrow(UUID id){
+        return userRepository.findById(id).orElseThrow(() -> CategoryNotFoundException.withId(id));
     }
 }

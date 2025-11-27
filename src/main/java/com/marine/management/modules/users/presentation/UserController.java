@@ -1,6 +1,8 @@
 package com.marine.management.modules.users.presentation;
 
 import com.marine.management.modules.auth.presentation.UserResponse;
+import com.marine.management.modules.finance.domain.FinancialCategory;
+import com.marine.management.modules.finance.presentation.dto.CategoryResponseDto;
 import com.marine.management.modules.users.application.UserService;
 import com.marine.management.modules.users.domain.User;
 import com.marine.management.shared.kernel.security.Role;
@@ -81,6 +83,20 @@ public class UserController {
 
         userService.changeUserPassword(userId, request.newPassword());
         return ResponseEntity.ok().build();
+    }
+
+    @PatchMapping("/{id}/activate")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<UserResponse> activate(@PathVariable UUID id) {
+        User user = userService.activate(id);
+        return ResponseEntity.ok(UserResponse.from(user));
+    }
+
+    @PatchMapping("/{id}/deactivate")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<UserResponse> deactivate(@PathVariable UUID id) {
+        User user = userService.deactivate(id);
+        return ResponseEntity.ok(UserResponse.from(user));
     }
 
     @DeleteMapping("/{userId}")
