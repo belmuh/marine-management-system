@@ -16,4 +16,8 @@ public class EntryNotFoundException extends RuntimeException{
     public static EntryNotFoundException withId(UUID id) {
         return new EntryNotFoundException("Entry not found with id: " + id);
     }
+
+    public static EntryNotFoundException withEntryNumber(String entryNumber) {
+        return new EntryNotFoundException("Entry not found with id: " + entryNumber);
+    }
 }

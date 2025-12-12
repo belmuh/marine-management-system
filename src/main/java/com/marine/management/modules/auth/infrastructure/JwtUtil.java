@@ -24,6 +24,9 @@ public class JwtUtil {
     @Value("${jwt.expiration}")
     private long expirationMs;
 
+    @Value("${refresh.token.expiration}")
+    private long refreshExpirationMs;
+
     private SecretKey getSigningKey(){
         return Keys.hmacShaKeyFor(secret.getBytes());
     }
@@ -96,5 +99,8 @@ public class JwtUtil {
 
     public long getExpirationMs(){
         return expirationMs;
+    }
+    public long getRefreshExpirationMs(){
+        return refreshExpirationMs;
     }
 }

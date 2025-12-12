@@ -1,6 +1,5 @@
 package com.marine.management.modules.users.application;
 
-import com.marine.management.modules.finance.domain.FinancialCategory;
 import com.marine.management.modules.users.domain.User;
 import com.marine.management.modules.users.infrastructure.UserRepository;
 import com.marine.management.shared.exceptions.CategoryNotFoundException;

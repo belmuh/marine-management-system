@@ -1,11 +1,13 @@
 package com.marine.management.modules.finance.application;
 
-import com.marine.management.modules.finance.domain.FinancialCategory;
+import com.marine.management.modules.finance.domain.entity.FinancialCategory;
+import com.marine.management.modules.finance.domain.enums.RecordType;
 import com.marine.management.modules.finance.infrastructure.FinancialCategoryRepository;
 import com.marine.management.shared.exceptions.CategoryNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -21,20 +23,20 @@ public class FinancialCategoryService {
     }
 
     @Transactional
-    public FinancialCategory create(String code, String name, String description, Integer displayOrder) {
+    public FinancialCategory create(String code, String name, RecordType categoryType, String description, Integer displayOrder, Boolean isTechnical) {
         if (categoryRepository.existsByCode(code)) {
             throw new IllegalArgumentException("Category code already exists: " + code);
         }
 
-        FinancialCategory category = FinancialCategory.create(code, name, description, displayOrder);
+        FinancialCategory category = FinancialCategory.create(code, name, categoryType, description, displayOrder, isTechnical);
 
         return categoryRepository.save(category);
     }
 
     @Transactional
-    public FinancialCategory update(UUID id, String name, String description) {
+    public FinancialCategory update(UUID id, String name, String description, RecordType categoryType, Boolean isTechnical) {
         FinancialCategory category = getByIdOrThrow(id);
-        category.updateDetails(name, description);
+        category.updateDetails(name, description, categoryType, isTechnical);
         return category;
     }
 
@@ -96,4 +98,7 @@ public class FinancialCategoryService {
         return categoryRepository.findById(id).orElseThrow(() -> CategoryNotFoundException.withId(id));
     }
 
+    public List<FinancialCategoryRepository.CategoryWithUsageCount> findByTypeWithUsageCount(RecordType categoryType, LocalDate oneYearAgo){
+        return categoryRepository.findByTypeWithUsageCount(categoryType, oneYearAgo);
+    }
 }

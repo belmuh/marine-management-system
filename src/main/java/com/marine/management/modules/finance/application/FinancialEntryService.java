@@ -1,10 +1,14 @@
 package com.marine.management.modules.finance.application;
 
-import com.marine.management.modules.finance.domain.*;
-import com.marine.management.modules.finance.domain.model.Money;
+import com.marine.management.modules.finance.domain.entity.FinancialCategory;
+import com.marine.management.modules.finance.domain.entity.FinancialEntry;
+import com.marine.management.modules.finance.domain.entity.FinancialEntryAttachment;
+import com.marine.management.modules.finance.domain.enums.PaymentMethod;
+import com.marine.management.modules.finance.domain.enums.RecordType;
+import com.marine.management.modules.finance.domain.vo.EntryNumber;
+import com.marine.management.modules.finance.domain.vo.Money;
 import com.marine.management.modules.finance.infrastructure.FinancialCategoryRepository;
 import com.marine.management.modules.finance.infrastructure.FinancialEntryRepository;
-import com.marine.management.modules.finance.presentation.dto.reports.*;
 import com.marine.management.modules.users.domain.User;
 import com.marine.management.shared.exceptions.EntryNotFoundException;
 import org.springframework.data.domain.Page;
@@ -14,8 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.*;
-import java.util.stream.IntStream;
+import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @Transactional(readOnly = true)
@@ -23,144 +27,124 @@ public class FinancialEntryService {
 
     private final FinancialEntryRepository entryRepository;
     private final FinancialCategoryRepository categoryRepository;
+    private final EntryFactory entryFactory;
+    private final EntryUpdater entryUpdater;
 
-    public FinancialEntryService(FinancialEntryRepository entryRepository,
-                                 FinancialCategoryRepository categoryRepository) {
+    public FinancialEntryService(
+            FinancialEntryRepository entryRepository,
+            FinancialCategoryRepository categoryRepository
+    ) {
         this.entryRepository = entryRepository;
         this.categoryRepository = categoryRepository;
+        this.entryFactory = new EntryFactory(entryRepository, categoryRepository);
+        this.entryUpdater = new EntryUpdater();
     }
 
+    // ============================================
+    // COMMAND METHODS (Transactional)
+    // ============================================
 
     @Transactional
-    public FinancialEntry create(
-            EntryType entryType,
-            UUID categoryId,
-            Money amount,
-            LocalDate entryDate,
-            User creator,
-            String description
-    ) {
-        // 1. Validate and get category
-        FinancialCategory category = getCategoryByIdOrThrow(categoryId);
+    public FinancialEntry createEntry(CreateEntryCommand command) {
+        FinancialEntry entry = entryFactory.createEntry(command);
+        return entryRepository.saveAndFlush(entry);
+    }
 
-        // 2. Generate entry number (database sequence - thread-safe)
-        EntryNumber entryNumber = generateEntryNumber();
+    @Transactional
+    public FinancialEntry updateEntry(UpdateEntryCommand command) {
+        FinancialEntry entry = findEntryOrThrow(command.entryId());
+        FinancialCategory category = findCategoryOrThrow(command.categoryId());
 
-        // 3. Create entry
-        FinancialEntry entry = FinancialEntry.create(
-                entryNumber,
-                entryType,
+        entryUpdater.updateDetails(
+                entry,
+                command.entryType(),
                 category,
-                amount,
-                entryDate,
-                creator,
-                description
+                command.amount(),
+                command.entryDate(),
+                command.paymentMethod(),
+                command.description(),
+                command.updater()
         );
 
-        // 4. Save
-        return entryRepository.save(entry);
-    }
-
-    @Transactional
-    public FinancialEntry createIncome(
-            UUID categoryId,
-            Money amount,
-            LocalDate entryDate,
-            User creator,
-            String description
-    ) {
-        return create(EntryType.INCOME, categoryId, amount, entryDate, creator, description);
-    }
-
-    @Transactional
-    public FinancialEntry createExpense(
-            UUID categoryId,
-            Money amount,
-            LocalDate entryDate,
-            User creator,
-            String description
-    ) {
-        return create(EntryType.EXPENSE, categoryId, amount, entryDate, creator, description);
-    }
-
-    // UPDATE
-    @Transactional
-    public FinancialEntry update(
-            UUID entryId,
-            UUID categoryId,
-            Money amount,
-            LocalDate entryDate,
-            String description,
-            User user
-    ) {
-        FinancialEntry entry = getByIdOrThrow(entryId);
-        FinancialCategory category = getCategoryByIdOrThrow(categoryId);
-
-        entry.updateDetails(category, amount, entryDate, description, user);
-        return entry; // JPA dirty checking
-    }
-
-    @Transactional
-    public FinancialEntry updateReceiptNumber(
-            UUID entryId,
-            String receiptNumber,
-            User user
-    ) {
-        FinancialEntry entry = getByIdOrThrow(entryId);
-        entry.updateReceiptNumber(receiptNumber, user);
         return entry;
     }
 
     @Transactional
-    public FinancialEntry setExchangeRate(
-            UUID entryId,
-            BigDecimal rate,
-            LocalDate rateDate,
-            User user
-    ) {
-        FinancialEntry entry = getByIdOrThrow(entryId);
-        entry.setExchangeRate(rate, rateDate, user);
+    public FinancialEntry updateEntryContext(UpdateEntryContextCommand command) {
+        FinancialEntry entry = findEntryOrThrow(command.entryId());
+
+        entry.updateContext(
+                command.whoId(),
+                command.mainCategoryId(),
+                command.recipient(),
+                command.country(),
+                command.city(),
+                command.specificLocation(),
+                command.vendor(),
+                command.updater()
+        );
+
         return entry;
     }
 
-    // DELETE
     @Transactional
-    public void delete(UUID entryId, User user) {
-        FinancialEntry entry = getByIdOrThrow(entryId);
-        entry.canBeEditedBy(user); // Permission check
+    public FinancialEntry updateEntryMetadata(UpdateEntryMetadataCommand command) {
+        FinancialEntry entry = findEntryOrThrow(command.entryId());
+
+        entry.updateMetadata(
+                command.frequency(),
+                command.priority(),
+                command.tags(),
+                command.updater()
+        );
+
+        return entry;
+    }
+
+    @Transactional
+    public FinancialEntry updateReceiptNumber(UpdateReceiptNumberCommand command) {
+        FinancialEntry entry = findEntryOrThrow(command.entryId());
+        entry.updateReceiptNumber(command.receiptNumber(), command.updater());
+        return entry;
+    }
+
+    @Transactional
+    public FinancialEntry updateExchangeRate(UpdateExchangeRateCommand command) {
+        FinancialEntry entry = findEntryOrThrow(command.entryId());
+        entry.updateExchangeRate(command.rate(), command.rateDate(), command.updater());
+        return entry;
+    }
+
+    @Transactional
+    public void deleteEntry(DeleteEntryCommand command) {
+        FinancialEntry entry = findEntryOrThrow(command.entryId());
+        verifyEditPermission(entry, command.user());
         entryRepository.delete(entry);
     }
 
-    // ATTACHMENTS
+    // ============================================
+    // ATTACHMENT COMMANDS
+    // ============================================
 
     @Transactional
-    public FinancialEntry addAttachment(
-            UUID entryId,
-            FinancialEntryAttachment attachment,
-            User user
-    ) {
-        FinancialEntry entry = getByIdOrThrow(entryId);
-        entry.addAttachment(attachment, user);
+    public FinancialEntry addAttachment(AddAttachmentCommand command) {
+        FinancialEntry entry = findEntryOrThrow(command.entryId());
+        entry.addAttachment(command.attachment(), command.updater());
         return entry;
     }
 
     @Transactional
-    public FinancialEntry removeAttachment(
-            UUID entryId,
-            UUID attachmentId,
-            User user
-    ) {
-        FinancialEntry entry = getByIdOrThrow(entryId);
-        FinancialEntryAttachment attachment = entry.getAttachments().stream()
-                .filter(a -> a.getId().equals(attachmentId))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Attachment not found"));
-
-        entry.removeAttachment(attachment, user);
+    public FinancialEntry removeAttachment(RemoveAttachmentCommand command) {
+        FinancialEntry entry = findEntryOrThrow(command.entryId());
+        FinancialEntryAttachment attachment = findAttachmentOrThrow(entry, command.attachmentId());
+        entry.removeAttachment(attachment, command.updater());
         return entry;
     }
 
-    // QUERY
+    // ============================================
+    // QUERY METHODS (Read-only)
+    // ============================================
+
     public Optional<FinancialEntry> findById(UUID id) {
         return entryRepository.findById(id);
     }
@@ -173,132 +157,269 @@ public class FinancialEntryService {
         return entryRepository.findByCreatedBy(user, pageable);
     }
 
-    public Page<FinancialEntry> findByDateRange(
-            LocalDate startDate,
-            LocalDate endDate,
-            Pageable pageable
-    ) {
+    public Page<FinancialEntry> findByDateRange(LocalDate startDate, LocalDate endDate, Pageable pageable) {
         return entryRepository.findByEntryDateBetween(startDate, endDate, pageable);
     }
 
-    public Page<FinancialEntry> findByType(EntryType type, Pageable pageable) {
+    public Page<FinancialEntry> findByType(RecordType type, Pageable pageable) {
         return entryRepository.findByEntryType(type, pageable);
     }
 
     public Page<FinancialEntry> findByCategory(UUID categoryId, Pageable pageable) {
-        FinancialCategory category = getCategoryByIdOrThrow(categoryId);
+        FinancialCategory category = findCategoryOrThrow(categoryId);
         return entryRepository.findByCategory(category, pageable);
     }
 
-    // SEARCH
-    public Page<FinancialEntry> search(
-            UUID categoryId,
-            EntryType entryType,
-            LocalDate startDate,
-            LocalDate endDate,
-            Pageable pageable
-    ) {
-        return entryRepository.search(categoryId, entryType, startDate, endDate, pageable);
+    public Page<FinancialEntry> findByWho(Long whoId, Pageable pageable) {
+        return entryRepository.findByWhoId(whoId, pageable);
     }
 
-    public Page<FinancialEntry> searchByText(
-            String searchTerm,
-            EntryType entryType,
-            LocalDate startDate,
-            LocalDate endDate,
-            Pageable pageable
-    ) {
-        return entryRepository.searchByText(searchTerm, entryType, startDate, endDate, pageable);
+    public Page<FinancialEntry> findByMainCategory(Long mainCategoryId, Pageable pageable) {
+        return entryRepository.findByMainCategoryId(mainCategoryId, pageable);
     }
 
-    // DASHBOARD
-    public List<FinancialEntryRepository.PeriodTotalProjection> getPeriodTotals(
-            LocalDate startDate,
-            LocalDate endDate
-    ) {
-        return entryRepository.findPeriodTotals(startDate, endDate);
-    }
-
-    public List<FinancialEntryRepository.CategoryTotalProjection> getCategoryTotals(
-            EntryType entryType,
-            LocalDate startDate,
-            LocalDate endDate
-    ) {
-        return entryRepository.findCategoryTotals(entryType, startDate, endDate);
-    }
-
-    public List<FinancialEntryRepository.CategoryTotalProjection> getExpenseTotals(
-            LocalDate startDate,
-            LocalDate endDate
-    ) {
-        return entryRepository.findExpenseTotals(startDate, endDate);
-    }
-
-    public List<FinancialEntryRepository.CategoryTotalProjection> getIncomeTotals(
-            LocalDate startDate,
-            LocalDate endDate
-    ) {
-        return entryRepository.findIncomeTotals(startDate, endDate);
-    }
-
-    public List<FinancialEntryRepository.MonthlyTotalProjection> getMonthlyTotals(
-            LocalDate startDate,
-            LocalDate endDate
-    ) {
-        return entryRepository.findMonthlyTotals(startDate, endDate);
-    }
-
-    public BigDecimal getTotalByType(
-            EntryType entryType,
-            LocalDate startDate,
-            LocalDate endDate
-    ) {
-        return entryRepository.sumByEntryTypeAndDateRange(entryType, startDate, endDate);
-    }
-
-    public long countByType(
-            EntryType entryType,
-            LocalDate startDate,
-            LocalDate endDate
-    ) {
-        return entryRepository.countByEntryTypeAndEntryDateBetween(entryType, startDate, endDate);
-    }
-
-    // DASHBOARD SUMMARY
-    public DashboardSummary getDashboardSummary(LocalDate startDate, LocalDate endDate) {
-        BigDecimal totalIncome = getTotalByType(EntryType.INCOME, startDate, endDate);
-        BigDecimal totalExpense = getTotalByType(EntryType.EXPENSE, startDate, endDate);
-        BigDecimal balance = totalIncome.subtract(totalExpense);
-
-        long incomeCount = countByType(EntryType.INCOME, startDate, endDate);
-        long expenseCount = countByType(EntryType.EXPENSE, startDate, endDate);
-
-        return new DashboardSummary(
-                totalIncome,
-                totalExpense,
-                balance,
-                incomeCount,
-                expenseCount
+    public Page<FinancialEntry> search(EntrySearchCriteria criteria, Pageable pageable) {
+        return entryRepository.search(
+                criteria.categoryId(),
+                criteria.entryType(),
+                criteria.whoId(),
+                criteria.mainCategoryId(),
+                criteria.startDate(),
+                criteria.endDate(),
+                pageable
         );
     }
 
-    // HELPER
-    private FinancialEntry getByIdOrThrow(UUID id) {
+    public Page<FinancialEntry> searchByText(TextSearchCriteria criteria, Pageable pageable) {
+        return entryRepository.searchByText(
+                criteria.searchTerm(),
+                criteria.entryType(),
+                criteria.startDate(),
+                criteria.endDate(),
+                pageable
+        );
+    }
+
+    // ============================================
+    // HELPER METHODS
+    // ============================================
+
+    private FinancialEntry findEntryOrThrow(UUID id) {
         return entryRepository.findById(id)
                 .orElseThrow(() -> EntryNotFoundException.withId(id));
     }
 
-    private FinancialCategory getCategoryByIdOrThrow(UUID id) {
+    private FinancialCategory findCategoryOrThrow(UUID id) {
         return categoryRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Category not found with id: " + id));
+                .orElseThrow(() -> new CategoryNotFoundException("Category not found with id: " + id));
     }
 
-    private EntryNumber generateEntryNumber() {
-        int sequence = entryRepository.getNextSequence();
-        return EntryNumber.generate(sequence);
+    private FinancialEntryAttachment findAttachmentOrThrow(FinancialEntry entry, UUID attachmentId) {
+        return entry.getAttachments().stream()
+                .filter(a -> a.getId().equals(attachmentId))
+                .findFirst()
+                .orElseThrow(() -> new AttachmentNotFoundException(
+                        "Attachment not found with id: " + attachmentId
+                ));
     }
 
-    // RECORD
+    private void verifyEditPermission(FinancialEntry entry, User user) {
+        entry.canBeEditedBy(user);
+    }
 
+    // ============================================
+    // INNER CLASSES
+    // ============================================
 
+    /**
+     * Factory for creating FinancialEntry instances
+     */
+    private static class EntryFactory {
+        private final FinancialEntryRepository entryRepository;
+        private final FinancialCategoryRepository categoryRepository;
+
+        EntryFactory(
+                FinancialEntryRepository entryRepository,
+                FinancialCategoryRepository categoryRepository
+        ) {
+            this.entryRepository = entryRepository;
+            this.categoryRepository = categoryRepository;
+        }
+
+        FinancialEntry createEntry(CreateEntryCommand command) {
+            FinancialCategory category = categoryRepository.findById(command.categoryId())
+                    .orElseThrow(() -> new CategoryNotFoundException(
+                            "Category not found with id: " + command.categoryId()
+                    ));
+
+            EntryNumber entryNumber = generateEntryNumber();
+
+            return FinancialEntry.create(
+                    entryNumber,
+                    command.entryType(),
+                    category,
+                    command.amount(),
+                    command.entryDate(),
+                    command.paymentMethod(),
+                    command.description(),
+                    command.creator(),
+                    command.whoId(),
+                    command.mainCategoryId(),
+                    command.recipient(),
+                    command.country(),
+                    command.city(),
+                    command.specificLocation(),
+                    command.vendor()
+            );
+        }
+
+        private EntryNumber generateEntryNumber() {
+            int sequence = entryRepository.getNextSequence();
+            return EntryNumber.generate(sequence);
+        }
+    }
+
+    /**
+     * Updater for modifying FinancialEntry instances
+     */
+    private static class EntryUpdater {
+        void updateDetails(
+                FinancialEntry entry,
+                RecordType entryType,
+                FinancialCategory category,
+                Money amount,
+                LocalDate entryDate,
+                PaymentMethod paymentMethod,
+                String description,
+                User updater
+        ) {
+            entry.updateDetails(
+                    entryType,
+                    category,
+                    amount,
+                    entryDate,
+                    paymentMethod,
+                    description,
+                    updater
+            );
+        }
+    }
+
+    // ============================================
+    // COMMAND RECORDS
+    // ============================================
+
+    public record CreateEntryCommand(
+            RecordType entryType,
+            UUID categoryId,
+            Money amount,
+            LocalDate entryDate,
+            PaymentMethod paymentMethod,
+            String description,
+            User creator,
+            Long whoId,
+            Long mainCategoryId,
+            String recipient,
+            String country,
+            String city,
+            String specificLocation,
+            String vendor
+    ) {}
+
+    public record UpdateEntryCommand(
+            UUID entryId,
+            RecordType entryType,
+            UUID categoryId,
+            Money amount,
+            LocalDate entryDate,
+            PaymentMethod paymentMethod,
+            String description,
+            User updater
+    ) {}
+
+    public record UpdateEntryContextCommand(
+            UUID entryId,
+            Long whoId,
+            Long mainCategoryId,
+            String recipient,
+            String country,
+            String city,
+            String specificLocation,
+            String vendor,
+            User updater
+    ) {}
+
+    public record UpdateEntryMetadataCommand(
+            UUID entryId,
+            String frequency,
+            String priority,
+            String tags,
+            User updater
+    ) {}
+
+    public record UpdateReceiptNumberCommand(
+            UUID entryId,
+            String receiptNumber,
+            User updater
+    ) {}
+
+    public record UpdateExchangeRateCommand(
+            UUID entryId,
+            BigDecimal rate,
+            LocalDate rateDate,
+            User updater
+    ) {}
+
+    public record DeleteEntryCommand(
+            UUID entryId,
+            User user
+    ) {}
+
+    public record AddAttachmentCommand(
+            UUID entryId,
+            FinancialEntryAttachment attachment,
+            User updater
+    ) {}
+
+    public record RemoveAttachmentCommand(
+            UUID entryId,
+            UUID attachmentId,
+            User updater
+    ) {}
+
+    // ============================================
+    // CRITERIA RECORDS
+    // ============================================
+
+    public record EntrySearchCriteria(
+            UUID categoryId,
+            RecordType entryType,
+            Long whoId,
+            Long mainCategoryId,
+            LocalDate startDate,
+            LocalDate endDate
+    ) {}
+
+    public record TextSearchCriteria(
+            String searchTerm,
+            RecordType entryType,
+            LocalDate startDate,
+            LocalDate endDate
+    ) {}
+
+    // ============================================
+    // CUSTOM EXCEPTIONS
+    // ============================================
+
+    public static class CategoryNotFoundException extends RuntimeException {
+        public CategoryNotFoundException(String message) {
+            super(message);
+        }
+    }
+
+    public static class AttachmentNotFoundException extends RuntimeException {
+        public AttachmentNotFoundException(String message) {
+            super(message);
+        }
+    }
 }

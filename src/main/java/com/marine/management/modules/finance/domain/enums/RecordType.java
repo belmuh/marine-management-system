@@ -1,15 +1,15 @@
-package com.marine.management.modules.finance.domain;
+package com.marine.management.modules.finance.domain.enums;
 
 import java.util.Arrays;
 
-public enum EntryType {
+public enum RecordType {
 
     INCOME("Gelir"),
     EXPENSE("Gider");
 
     private final String displayName;
 
-    EntryType(String displayName) {
+    RecordType(String displayName) {
         this.displayName = displayName;
     }
 
@@ -20,7 +20,7 @@ public enum EntryType {
     public boolean isIncome() { return this == INCOME; }
     public boolean isExpense() { return this == EXPENSE; }
 
-    public static EntryType fromDisplayName(String displayName) {
+    public static RecordType fromDisplayName(String displayName) {
         return Arrays.stream(values())
                 .filter(type -> type.displayName.equalsIgnoreCase(displayName))
                 .findFirst()

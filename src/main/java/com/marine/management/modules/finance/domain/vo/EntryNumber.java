@@ -1,4 +1,4 @@
-package com.marine.management.modules.finance.domain;
+package com.marine.management.modules.finance.domain.vo;
 
 import jakarta.persistence.Embeddable;
 

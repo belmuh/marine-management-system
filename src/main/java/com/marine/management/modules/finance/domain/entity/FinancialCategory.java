@@ -1,5 +1,6 @@
-package com.marine.management.modules.finance.domain;
+package com.marine.management.modules.finance.domain.entity;
 
+import com.marine.management.modules.finance.domain.enums.RecordType;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
@@ -22,8 +23,14 @@ public class FinancialCategory {
     @Column(nullable = false)
     private String name;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private RecordType categoryType;
+
     @Column(length = 500)
     private String description;
+
+    private boolean isTechnical = true;
 
     @Column(nullable = false)
     private boolean isActive = true;
@@ -40,23 +47,29 @@ public class FinancialCategory {
     public static FinancialCategory create(
             String code,
             String name,
+            RecordType categoryType,
             String description,
-            Integer displayOrder
+            Integer displayOrder,
+            boolean isTechnical
     ) {
         FinancialCategory category = new FinancialCategory();
         category.code = code.toUpperCase().trim();
         category.name = name.trim();
+        category.categoryType = categoryType;
         category.description = description != null ? description.trim() : "";;
         category.displayOrder = displayOrder;
         category.createdAt = LocalDateTime.now();
+        category.isTechnical = isTechnical;
         category.validate();
         return category;
     }
 
     // update
-    public void updateDetails(String name, String description) {
+    public void updateDetails(String name, String description, RecordType entryType, Boolean isTechnical) {
         this.name = name.trim();
-        this.description = description != null ? description.trim() : "";;
+        this.description = description != null ? description.trim() : "";
+        this.categoryType = entryType;
+        this.isTechnical = isTechnical;
         validate();
     }
 
@@ -86,8 +99,14 @@ public class FinancialCategory {
         return name;
     }
 
+    public RecordType getCategoryType() {return categoryType;}
+
     public String getDescription() {
         return description;
+    }
+
+    public boolean isTechnical() {
+        return isTechnical;
     }
 
     public boolean isActive() {
@@ -115,6 +134,9 @@ public class FinancialCategory {
         }
         if (name.length() > MAX_NAME_LENGTH) {
             throw new IllegalStateException("Category name cannot exceed 100 characters");
+        }
+        if (categoryType == null) {
+            throw new IllegalStateException("Entry type is required");
         }
     }
 

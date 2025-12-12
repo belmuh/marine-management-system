@@ -1,15 +1,19 @@
 package com.marine.management.modules.finance.presentation;
 
 import com.marine.management.modules.finance.application.FinancialCategoryService;
-import com.marine.management.modules.finance.domain.FinancialCategory;
+import com.marine.management.modules.finance.domain.enums.RecordType;
+import com.marine.management.modules.finance.domain.entity.FinancialCategory;
+import com.marine.management.modules.finance.infrastructure.FinancialCategoryRepository;
 import com.marine.management.modules.finance.presentation.dto.CategoryRequestDto;
 import com.marine.management.modules.finance.presentation.dto.CategoryResponseDto;
+import com.marine.management.modules.finance.presentation.dto.CategoryWithUsageDto;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -29,8 +33,10 @@ public class FinancialCategoryController {
         FinancialCategory category = categoryService.create(
                 request.code(),
                 request.name(),
+                request.categoryType(),
                 request.description(),
-                request.displayOrder()
+                request.displayOrder(),
+                request.isTechnical()
         );
 
         return ResponseEntity
@@ -69,6 +75,21 @@ public class FinancialCategoryController {
         );
     }
 
+    @GetMapping("/by-type")
+    public ResponseEntity<List<CategoryWithUsageDto>> getByTypeWithUsage(
+            @RequestParam RecordType entryType,
+             @RequestParam LocalDate oneYearAgo
+    ) {
+        List<FinancialCategoryRepository.CategoryWithUsageCount> categoriesWithUsage =
+                categoryService.findByTypeWithUsageCount(entryType, oneYearAgo);
+
+        return ResponseEntity.ok(
+                categoriesWithUsage.stream()
+                        .map(CategoryWithUsageDto::from)
+                        .toList()
+        );
+    }
+
     @GetMapping("/search")
     public ResponseEntity<List<CategoryResponseDto>> search(
             @RequestParam String keyword
@@ -92,7 +113,9 @@ public class FinancialCategoryController {
         FinancialCategory category = categoryService.update(
                 id,
                 request.name(),
-                request.description()
+                request.description(),
+                request.categoryType(),
+                request.isTechnical()
         );
 
         return ResponseEntity.ok(CategoryResponseDto.from(category));

@@ -2,7 +2,7 @@ package com.marine.management.modules.finance.application.usecase;
 
 import com.marine.management.modules.finance.application.mapper.ReportMapper;
 import com.marine.management.modules.finance.domain.model.AnnualReport;
-import com.marine.management.modules.finance.domain.model.Period;
+import com.marine.management.modules.finance.domain.vo.Period;
 import com.marine.management.modules.finance.domain.service.ReportGenerator;
 import com.marine.management.modules.finance.infrastructure.FinancialEntryRepository;
 import com.marine.management.modules.finance.presentation.dto.reports.AnnualBreakdownDto;

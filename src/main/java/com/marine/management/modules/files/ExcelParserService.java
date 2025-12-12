@@ -1,6 +1,6 @@
 package com.marine.management.modules.files;
 
-import com.marine.management.modules.files.ExcelRow;
+import com.marine.management.modules.finance.domain.enums.RecordType;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
@@ -87,6 +87,7 @@ public class ExcelParserService {
 
             // Gelir mi gider mi olduğunu belirle
             boolean isIncome = incomeAmount != null && incomeAmount.compareTo(BigDecimal.ZERO) > 0;
+            RecordType entryType = isIncome ? RecordType.INCOME : RecordType.EXPENSE;
             BigDecimal amount = isIncome ? incomeAmount : expenseAmount;
 
             // Eğer her iki tutar da null veya 0 ise bu satırı atla
@@ -108,7 +109,16 @@ public class ExcelParserService {
             // Para birimi olarak EUR kullan
             String currency = "EUR";
 
-            return new ExcelRow(date, type, category, amount, currency, description, isIncome);
+            return new ExcelRow(
+                    date,
+                    type,
+                    category,
+                    entryType,      // YENİ
+                    amount,
+                    currency,
+                    description,
+                    isIncome
+            );
 
         } catch (Exception e) {
             throw new RuntimeException("Satır " + rowNumber + " işlenirken hata: " + e.getMessage(), e);

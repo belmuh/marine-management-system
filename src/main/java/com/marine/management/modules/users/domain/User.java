@@ -24,6 +24,9 @@ public class User {
     @Column(unique = true, nullable = false, length = 100)
     private String email;
 
+    private String firstName;
+    private String lastName;
+
     @Column(nullable = false)
     private String password;
 
@@ -35,7 +38,6 @@ public class User {
     private boolean isActive = true;
 
     private LocalDateTime createdAt;
-
     private LocalDateTime updatedAt;
 
     protected User(){}
@@ -155,6 +157,18 @@ public class User {
 
     public boolean isActive() {
         return isActive;
+    }
+
+    public String getFirstName(){ return firstName; }
+    public String getLastName(){ return lastName; }
+    public String getFullName() {
+        if (firstName == null && lastName == null) {
+            return username;
+        }
+        if (firstName != null && lastName != null) {
+            return firstName + " " + lastName;
+        }
+        return firstName != null ? firstName : lastName;
     }
 
     String getPassword() {

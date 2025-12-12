@@ -1,10 +1,10 @@
 package com.marine.management.modules.finance.domain.service;
 
-import com.marine.management.modules.finance.domain.EntryType;
-import com.marine.management.modules.finance.domain.FinancialEntry;
+import com.marine.management.modules.finance.domain.entity.FinancialEntry;
+import com.marine.management.modules.finance.domain.enums.RecordType;
 import com.marine.management.modules.finance.domain.model.AnnualReport;
 import com.marine.management.modules.finance.domain.model.MonthlyBreakdown;
-import com.marine.management.modules.finance.domain.model.Period;
+import com.marine.management.modules.finance.domain.vo.Period;
 import com.marine.management.modules.finance.domain.model.PeriodReport;
 import org.springframework.stereotype.Component;
 
@@ -14,13 +14,7 @@ import java.util.*;
 @Component
 public class ReportGenerator {
 
-    /**
-     * Generates an annual financial report
-     *
-     * @param entries All financial entries
-     * @param year Target year
-     * @return Annual report with category breakdowns and monthly totals
-     */
+
     public AnnualReport generateAnnualReport(List<FinancialEntry> entries, int year) {
         Period period = Period.ofYear(year);
         List<FinancialEntry> yearEntries = filterEntriesByPeriod(entries, period);
@@ -31,13 +25,7 @@ public class ReportGenerator {
         return new AnnualReport(year, categoryBreakdowns, monthlyTotals);
     }
 
-    /**
-     * Generates a period financial report
-     *
-     * @param entries All financial entries
-     * @param period Target period
-     * @return Period report with category breakdowns and monthly totals
-     */
+
     public PeriodReport generatePeriodReport(List<FinancialEntry> entries, Period period) {
         List<FinancialEntry> periodEntries = filterEntriesByPeriod(entries, period);
 
@@ -61,11 +49,11 @@ public class ReportGenerator {
         Map<String, MonthlyBreakdown> categoryMap = new HashMap<>();
 
         entries.stream()
-                .filter(entry -> entry.getEntryType() == EntryType.EXPENSE)
+                .filter(entry -> entry.getEntryType() == RecordType.EXPENSE)
                 .forEach(entry -> {
                     String categoryName = entry.getCategory().getName();
                     int month = entry.getEntryDate().getMonthValue();
-                    BigDecimal amount = entry.getBaseAmount().amount();
+                    BigDecimal amount = entry.getBaseAmount().getAmount();
 
                     categoryMap
                             .computeIfAbsent(categoryName, MonthlyBreakdown::new)
@@ -83,9 +71,9 @@ public class ReportGenerator {
 
         entries.forEach(entry -> {
             int month = entry.getEntryDate().getMonthValue();
-            BigDecimal amount = entry.getBaseAmount().amount();
+            BigDecimal amount = entry.getBaseAmount().getAmount();
 
-            if (entry.getEntryType() == EntryType.INCOME) {
+            if (entry.getEntryType() == RecordType.INCOME) {
                 monthlyIncome.merge(month, amount, BigDecimal::add);
             } else {
                 monthlyExpense.merge(month, amount, BigDecimal::add);
@@ -114,9 +102,9 @@ public class ReportGenerator {
 
         entries.forEach(entry -> {
             int month = entry.getEntryDate().getMonthValue();
-            BigDecimal amount = entry.getBaseAmount().amount();
+            BigDecimal amount = entry.getBaseAmount().getAmount();
 
-            if (entry.getEntryType() == EntryType.INCOME) {
+            if (entry.getEntryType() == RecordType.INCOME) {
                 monthlyIncome.merge(month, amount, BigDecimal::add);
             } else {
                 monthlyExpense.merge(month, amount, BigDecimal::add);

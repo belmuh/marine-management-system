@@ -21,13 +21,16 @@ public class AuthService {
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
+    private final RefreshTokenService refreshTokenService;
 
     public AuthService(UserRepository userRepository,
                        JwtUtil jwtUtil,
-                       PasswordEncoder passwordEncoder) {
+                       PasswordEncoder passwordEncoder,
+                       RefreshTokenService refreshTokenService) {
         this.userRepository = userRepository;
         this.jwtUtil = jwtUtil;
         this.passwordEncoder = passwordEncoder;
+        this.refreshTokenService = refreshTokenService;
     }
 
 
@@ -38,8 +41,13 @@ public class AuthService {
         return user.credentialsMatch(inputPassword, passwordEncoder) && Authentication.canGenerateTokenForUser(user);
     }
 
-    public AuthResult login(LoginCommand command){
+    @Transactional
+    public AuthResult login(LoginCommand command, String ipAddress, String userAgent){
         User user = findUserByUsernameOrThrow(command.username());
+
+        if (!user.isActive()) {
+            throw new RuntimeException("User account is disabled");
+        }
 
         boolean authenticated = authenticate(user, command.password());
 
@@ -51,10 +59,20 @@ public class AuthService {
             throw new UnauthorizedAccessException("User cannot generate token");
         }
 
-        String token =  jwtUtil.generateToken(user);
+        String accessToken =  jwtUtil.generateToken(user);
         UserResponse userResponse = UserResponse.from(user);
 
-        return new AuthResult(token, userResponse);
+        String refreshToken = refreshTokenService.createRefreshToken(
+                user.getId(),
+                ipAddress,  // IP address
+                userAgent   // User agent
+        ).getToken();
+
+        return new AuthResult(accessToken,
+                refreshToken,
+                user,
+                jwtUtil.getExpirationMs(),
+                jwtUtil.getRefreshExpirationMs());
     }
 
     public boolean validateToken(String token) {

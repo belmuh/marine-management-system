@@ -1,9 +1,16 @@
 package com.marine.management.modules.auth.presentation;
 
 import com.marine.management.modules.auth.application.AuthService;
+import com.marine.management.modules.auth.application.RefreshTokenService;
 import com.marine.management.modules.auth.domain.AuthResult;
 import com.marine.management.modules.auth.domain.LoginCommand;
+import com.marine.management.modules.auth.infrastructure.JwtUtil;
+import com.marine.management.modules.auth.presentation.dto.AuthResponse;
+import com.marine.management.modules.auth.presentation.dto.LoginRequest;
+import com.marine.management.modules.auth.presentation.dto.RefreshTokenRequest;
+import com.marine.management.modules.auth.presentation.dto.RefreshTokenResponse;
 import com.marine.management.modules.users.domain.User;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -18,20 +25,34 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+    private final RefreshTokenService refreshTokenService;
+    private final JwtUtil jwtUtil;
 
-    public AuthController(AuthService authService){
+    public AuthController(AuthService authService,
+                          RefreshTokenService refreshTokenService,
+                          JwtUtil jwtUtil){
         this.authService = authService;
+        this.refreshTokenService = refreshTokenService;
+        this.jwtUtil = jwtUtil;
     }
 
     @PostMapping("/login")
    // @RateLimit(limit = 5, duration = 15) // 15 dakikada 5 deneme
-    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request,
+                                              HttpServletRequest httpRequest) {
 
+        String ipAddress = httpRequest.getRemoteAddr();
+        String userAgent = httpRequest.getHeader("User-Agent");
 
         LoginCommand command = new LoginCommand(request.username(), request.password());
-        AuthResult authResult = authService.login(command);
+        AuthResult authResult = authService.login(command, ipAddress, userAgent);
 
-        AuthResponse response = new AuthResponse(authResult.getToken(), authResult.getUser());
+        AuthResponse response = AuthResponse.from(
+                authResult.user(),
+                authResult.accessToken(),
+                authResult.refreshToken(),
+                authResult.accessTokenExpiry(),
+                authResult.refreshTokenExpiry());
 
         return ResponseEntity.ok(response);
     }
@@ -46,16 +67,33 @@ public class AuthController {
         return ResponseEntity.ok(userResponse);
     }
 
+    @PostMapping("/refresh")
+    public ResponseEntity<RefreshTokenResponse> refreshToken(
+            @RequestBody RefreshTokenRequest request) {
 
-    public record LoginRequest(
-            @NotBlank(message = "Username cannot be blank")
-            @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
-            @Pattern(regexp = "^[a-zA-Z0-9_]+$", message = "Username can only contain letters, numbers and underscores")
-            String username,
+        try {
+            // Refresh token'ı doğrula
+            User user = refreshTokenService.validateRefreshToken(request.refreshToken());
 
-            @NotBlank(message = "Password cannot be blank")
-            @Size(min = 8, message = "Password must be at least 8 characters")
-            String password
-    ) {}
-    public record AuthResponse(String token, UserResponse user) {}
+            // Yeni access token oluştur
+            String newAccessToken = jwtUtil.generateToken(user);
+
+            RefreshTokenResponse response = new RefreshTokenResponse(newAccessToken, jwtUtil.getExpirationMs());
+
+            return ResponseEntity.ok(response);
+
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(null);
+        }
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(@RequestBody RefreshTokenRequest request) {
+        refreshTokenService.deleteRefreshToken(request.refreshToken());
+        return ResponseEntity.ok().build();
+    }
+
+
+
 }

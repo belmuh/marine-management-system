@@ -1,7 +1,8 @@
 package com.marine.management.modules.finance.domain.model;
 
+import com.marine.management.modules.finance.domain.vo.Period;
+
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 

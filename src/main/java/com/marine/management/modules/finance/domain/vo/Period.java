@@ -1,4 +1,4 @@
-package com.marine.management.modules.finance.domain.model;
+package com.marine.management.modules.finance.domain.vo;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -7,6 +7,10 @@ public record Period(LocalDate startDate, LocalDate endDate) {
 
     public Period {
         validatePeriod(startDate, endDate);
+    }
+
+    public static Period of(LocalDate startDate, LocalDate endDate) {
+        return new Period(startDate, endDate);
     }
 
     public static Period ofYear(int year) {

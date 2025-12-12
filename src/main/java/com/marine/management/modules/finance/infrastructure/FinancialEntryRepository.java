@@ -1,9 +1,8 @@
 package com.marine.management.modules.finance.infrastructure;
 
-import com.marine.management.modules.finance.domain.EntryNumber;
-import com.marine.management.modules.finance.domain.EntryType;
-import com.marine.management.modules.finance.domain.FinancialCategory;
-import com.marine.management.modules.finance.domain.FinancialEntry;
+import com.marine.management.modules.finance.domain.enums.RecordType;
+import com.marine.management.modules.finance.domain.entity.FinancialCategory;
+import com.marine.management.modules.finance.domain.entity.FinancialEntry;
 import com.marine.management.modules.users.domain.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -45,11 +44,21 @@ public interface FinancialEntryRepository extends JpaRepository<FinancialEntry, 
 
 
     // TYPE AND CATEGORY QUERIES
-    List<FinancialEntry> findByEntryTypeOrderByEntryDateDesc(EntryType type);
-    Page<FinancialEntry> findByEntryType(EntryType type, Pageable pageable);
+    List<FinancialEntry> findByEntryTypeOrderByEntryDateDesc(RecordType type);
+    Page<FinancialEntry> findByEntryType(RecordType type, Pageable pageable);
 
     List<FinancialEntry> findByCategoryOrderByEntryDateDesc(FinancialCategory category);
     Page<FinancialEntry> findByCategory(FinancialCategory category, Pageable pageable);
+
+    // WHO AND MAIN CATEGORY QUERIES
+    Page<FinancialEntry> findByWhoId(Long whoId, Pageable pageable);
+    List<FinancialEntry> findByWhoIdOrderByEntryDateDesc(Long whoId);
+
+    Page<FinancialEntry> findByMainCategoryId(Long mainCategoryId, Pageable pageable);
+    List<FinancialEntry> findByMainCategoryIdOrderByEntryDateDesc(Long mainCategoryId);
+
+    // Combined who + main category
+    Page<FinancialEntry> findByWhoIdAndMainCategoryId(Long whoId, Long mainCategoryId, Pageable pageable);
 
 
     // DASHBOARD METRICS
@@ -72,19 +81,51 @@ public interface FinancialEntryRepository extends JpaRepository<FinancialEntry, 
             "GROUP BY e.category.name " +
             "ORDER BY total DESC")
     List<CategoryTotalProjection> findCategoryTotals(
-            @Param("entryType") EntryType entryType,
+            @Param("entryType") RecordType entryType,
             @Param("start") LocalDate start,
             @Param("end") LocalDate end
     );
 
     // Helper methods for type-safe category totals
     default List<CategoryTotalProjection> findExpenseTotals(LocalDate start, LocalDate end) {
-        return findCategoryTotals(EntryType.EXPENSE, start, end);
+        return findCategoryTotals(RecordType.EXPENSE, start, end);
     }
 
     default List<CategoryTotalProjection> findIncomeTotals(LocalDate start, LocalDate end) {
-        return findCategoryTotals(EntryType.INCOME, start, end);
+        return findCategoryTotals(RecordType.INCOME, start, end);
     }
+
+    // Who-based totals (for yacht-specific analytics)
+    @Query("SELECT e.whoId as whoId, " +
+            "SUM(e.baseAmount.amount) as total, " +
+            "COUNT(e.id) as entryCount " +
+            "FROM FinancialEntry e " +
+            "WHERE e.entryType = :entryType " +
+            "AND e.whoId IS NOT NULL " +
+            "AND e.entryDate BETWEEN :start AND :end " +
+            "GROUP BY e.whoId " +
+            "ORDER BY total DESC")
+    List<WhoTotalProjection> findWhoTotals(
+            @Param("entryType") RecordType entryType,
+            @Param("start") LocalDate start,
+            @Param("end") LocalDate end
+    );
+
+    // Main Category totals (high-level grouping)
+    @Query("SELECT e.mainCategoryId as mainCategoryId, " +
+            "SUM(e.baseAmount.amount) as total, " +
+            "COUNT(e.id) as entryCount " +
+            "FROM FinancialEntry e " +
+            "WHERE e.entryType = :entryType " +
+            "AND e.mainCategoryId IS NOT NULL " +
+            "AND e.entryDate BETWEEN :start AND :end " +
+            "GROUP BY e.mainCategoryId " +
+            "ORDER BY total DESC")
+    List<MainCategoryTotalProjection> findMainCategoryTotals(
+            @Param("entryType") RecordType entryType,
+            @Param("start") LocalDate start,
+            @Param("end") LocalDate end
+    );
 
     // Monthly totals for charts
     @Query("SELECT EXTRACT(YEAR FROM e.entryDate) as year, " +
@@ -102,16 +143,20 @@ public interface FinancialEntryRepository extends JpaRepository<FinancialEntry, 
     );
 
 
-    // ADVANCED SEARCH
+    // ADVANCED SEARCH (Updated with who and mainCategory)
     @Query("SELECT e FROM FinancialEntry e WHERE " +
             "(:categoryId IS NULL OR e.category.id = :categoryId) AND " +
             "(:entryType IS NULL OR e.entryType = :entryType) AND " +
-            "(:startDate IS NULL OR e.entryDate >= :startDate) AND " +
-            "(:endDate IS NULL OR e.entryDate <= :endDate) " +
+            "(:whoId IS NULL OR e.whoId = :whoId) AND " +
+            "(:mainCategoryId IS NULL OR e.mainCategoryId = :mainCategoryId) AND " +
+            "e.entryDate >= COALESCE(:startDate, {d '1900-01-01'}) AND " +
+            "e.entryDate <= COALESCE(:endDate, {d '2100-12-31'}) " +
             "ORDER BY e.entryDate DESC")
     Page<FinancialEntry> search(
             @Param("categoryId") UUID categoryId,
-            @Param("entryType") EntryType entryType,
+            @Param("entryType") RecordType entryType,
+            @Param("whoId") Long whoId,
+            @Param("mainCategoryId") Long mainCategoryId,
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate,
             Pageable pageable
@@ -122,11 +167,11 @@ public interface FinancialEntryRepository extends JpaRepository<FinancialEntry, 
             "(LOWER(e.description) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
             "LOWER(e.receiptNumber) LIKE LOWER(CONCAT('%', :searchTerm, '%'))) AND " +
             "(:entryType IS NULL OR e.entryType = :entryType) AND " +
-            "(:startDate IS NULL OR e.entryDate >= :startDate) AND " +
-            "(:endDate IS NULL OR e.entryDate <= :endDate)")
+            "e.entryDate >= COALESCE(:startDate, {d '1900-01-01'}) AND " +
+            "e.entryDate <= COALESCE(:endDate, {d '2100-12-31'}) "   )
     Page<FinancialEntry> searchByText(
             @Param("searchTerm") String searchTerm,
-            @Param("entryType") EntryType entryType,
+            @Param("entryType") RecordType entryType,
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate,
             Pageable pageable
@@ -143,7 +188,7 @@ public interface FinancialEntryRepository extends JpaRepository<FinancialEntry, 
             "GROUP BY e.category.name, EXTRACT(MONTH FROM e.entryDate) " +
             "ORDER BY categoryName, month")
     List<CategoryMonthBreakdownProjection> findCategoryMonthBreakdown(
-            @Param("entryType") EntryType entryType,
+            @Param("entryType") RecordType entryType,
             @Param("year") int year
     );
 
@@ -159,6 +204,22 @@ public interface FinancialEntryRepository extends JpaRepository<FinancialEntry, 
             @Param("year") int year
     );
 
+    // Main Category breakdown by month (for high-level reports)
+    @Query("SELECT e.mainCategoryId as mainCategoryId, " +
+            "EXTRACT(MONTH FROM e.entryDate) as month, " +
+            "SUM(e.baseAmount.amount) as total, " +
+            "COUNT(e.id) as entryCount " +
+            "FROM FinancialEntry e " +
+            "WHERE e.entryType = :entryType " +
+            "AND e.mainCategoryId IS NOT NULL " +
+            "AND EXTRACT(YEAR FROM e.entryDate) = :year " +
+            "GROUP BY e.mainCategoryId, EXTRACT(MONTH FROM e.entryDate) " +
+            "ORDER BY mainCategoryId, month")
+    List<MainCategoryMonthBreakdownProjection> findMainCategoryMonthBreakdown(
+            @Param("entryType") RecordType entryType,
+            @Param("year") int year
+    );
+
     interface CategoryMonthBreakdownProjection {
         String getCategoryName();
         Integer getMonth();
@@ -167,15 +228,22 @@ public interface FinancialEntryRepository extends JpaRepository<FinancialEntry, 
 
     interface MonthlyIncomeExpenseProjection {
         Integer getMonth();
-        EntryType getEntryType();
+        RecordType getEntryType();
         BigDecimal getTotal();
+    }
+
+    interface MainCategoryMonthBreakdownProjection {
+        Long getMainCategoryId();
+        Integer getMonth();
+        BigDecimal getTotal();
+        Long getEntryCount();
     }
 
     // STATISTICS
 
     // Count by type and date range
     long countByEntryTypeAndEntryDateBetween(
-            EntryType entryType,
+            RecordType entryType,
             LocalDate startDate,
             LocalDate endDate
     );
@@ -184,7 +252,16 @@ public interface FinancialEntryRepository extends JpaRepository<FinancialEntry, 
     @Query("SELECT COALESCE(SUM(e.baseAmount.amount), 0) FROM FinancialEntry e " +
             "WHERE e.entryType = :entryType AND e.entryDate BETWEEN :start AND :end")
     BigDecimal sumByEntryTypeAndDateRange(
-            @Param("entryType") EntryType entryType,
+            @Param("entryType") RecordType entryType,
+            @Param("start") LocalDate start,
+            @Param("end") LocalDate end
+    );
+
+    // Count detailed vs simple entries
+    @Query("SELECT COUNT(e) FROM FinancialEntry e " +
+            "WHERE e.whoId IS NOT NULL AND e.mainCategoryId IS NOT NULL " +
+            "AND e.entryDate BETWEEN :start AND :end")
+    long countDetailedEntries(
             @Param("start") LocalDate start,
             @Param("end") LocalDate end
     );
@@ -193,7 +270,7 @@ public interface FinancialEntryRepository extends JpaRepository<FinancialEntry, 
     // PROJECTION INTERFACES
 
     interface PeriodTotalProjection {
-        EntryType getEntryType();
+        RecordType getEntryType();
         BigDecimal getTotal();
     }
 
@@ -203,10 +280,22 @@ public interface FinancialEntryRepository extends JpaRepository<FinancialEntry, 
         Long getEntryCount();
     }
 
+    interface WhoTotalProjection {
+        Long getWhoId();
+        BigDecimal getTotal();
+        Long getEntryCount();
+    }
+
+    interface MainCategoryTotalProjection {
+        Long getMainCategoryId();
+        BigDecimal getTotal();
+        Long getEntryCount();
+    }
+
     interface MonthlyTotalProjection {
         Integer getYear();
         Integer getMonth();
-        EntryType getEntryType();
+        RecordType getEntryType();
         BigDecimal getTotal();
         Long getEntryCount();
     }

@@ -1,8 +1,6 @@
 package com.marine.management.modules.users.presentation;
 
 import com.marine.management.modules.auth.presentation.UserResponse;
-import com.marine.management.modules.finance.domain.FinancialCategory;
-import com.marine.management.modules.finance.presentation.dto.CategoryResponseDto;
 import com.marine.management.modules.users.application.UserService;
 import com.marine.management.modules.users.domain.User;
 import com.marine.management.shared.kernel.security.Role;

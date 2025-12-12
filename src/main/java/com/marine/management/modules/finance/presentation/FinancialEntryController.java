@@ -2,25 +2,18 @@ package com.marine.management.modules.finance.presentation;
 
 import com.marine.management.modules.finance.application.FileStorageService;
 import com.marine.management.modules.finance.application.FinancialEntryService;
-import com.marine.management.modules.finance.domain.EntryType;
-import com.marine.management.modules.finance.domain.FinancialEntry;
-import com.marine.management.modules.finance.domain.FinancialEntryAttachment;
-import com.marine.management.modules.finance.domain.model.Money;
-import com.marine.management.modules.finance.infrastructure.FinancialEntryRepository;
-import com.marine.management.modules.finance.presentation.dto.EntryResponseDto;
-import com.marine.management.modules.finance.presentation.dto.reports.AnnualBreakdownDto;
-import com.marine.management.modules.finance.presentation.dto.reports.DashboardSummary;
-import com.marine.management.modules.finance.presentation.dto.reports.PeriodBreakdownDto;
+import com.marine.management.modules.finance.domain.entity.FinancialEntry;
+import com.marine.management.modules.finance.domain.entity.FinancialEntryAttachment;
+import com.marine.management.modules.finance.presentation.dto.*;
+import com.marine.management.modules.finance.presentation.dto.controller.*;
 import com.marine.management.modules.users.domain.User;
+import com.marine.management.shared.exceptions.AttachmentNotFoundException;
 import com.marine.management.shared.exceptions.EntryNotFoundException;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -29,10 +22,9 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.math.BigDecimal;
+import com.marine.management.modules.finance.presentation.dto.controller.*;
+
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -41,91 +33,52 @@ public class FinancialEntryController {
 
     private final FinancialEntryService entryService;
     private final FileStorageService fileStorageService;
+    private final EntryRequestMapper requestMapper;
 
-    public FinancialEntryController(FinancialEntryService entryService, FileStorageService fileStorageService) {
+    public FinancialEntryController(
+            FinancialEntryService entryService,
+            FileStorageService fileStorageService
+    ) {
         this.entryService = entryService;
         this.fileStorageService = fileStorageService;
+        this.requestMapper = new EntryRequestMapper();
     }
 
-    // CREATE
+    // ============================================
+    // CREATE OPERATION
+    // ============================================
+
     @PostMapping
-    public ResponseEntity<EntryResponseDto> create(
+    public ResponseEntity<EntryResponseDto> createEntry(
             @Valid @RequestBody CreateEntryRequest request,
             @AuthenticationPrincipal User currentUser
     ) {
-        Money amount = Money.of(request.amount(), request.currency());
-
-        FinancialEntry entry = entryService.create(
-                request.entryType(),
-                request.categoryId(),
-                amount,
-                request.entryDate(),
-                currentUser,
-                request.description()
-        );
+        var command = requestMapper.toCreateEntryCommand(request, currentUser);
+        var entry = entryService.createEntry(command);
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(EntryResponseDto.from(entry));
     }
 
-    @PostMapping("/income")
-    public ResponseEntity<EntryResponseDto> createIncome(
-            @Valid @RequestBody CreateIncomeExpenseRequest request,
-            @AuthenticationPrincipal User currentUser
-    ) {
-        Money amount = Money.of(request.amount(), request.currency());
+    // ============================================
+    // READ OPERATIONS
+    // ============================================
 
-        FinancialEntry entry = entryService.createIncome(
-                request.categoryId(),
-                amount,
-                request.entryDate(),
-                currentUser,
-                request.description()
-        );
-
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(EntryResponseDto.from(entry));
-    }
-
-    @PostMapping("/expense")
-    public ResponseEntity<EntryResponseDto> createExpense(
-            @Valid @RequestBody CreateIncomeExpenseRequest request,
-            @AuthenticationPrincipal User currentUser
-    ) {
-        Money amount = Money.of(request.amount(), request.currency());
-
-        FinancialEntry entry = entryService.createExpense(
-                request.categoryId(),
-                amount,
-                request.entryDate(),
-                currentUser,
-                request.description()
-        );
-
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(EntryResponseDto.from(entry));
-    }
-
-    // READ
     @GetMapping("/{id}")
     public ResponseEntity<EntryResponseDto> getById(@PathVariable UUID id) {
-        return entryService.findById(id)
-                .map(EntryResponseDto::from)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        var entry = findEntryOrThrow(id);
+        return ResponseEntity.ok(EntryResponseDto.from(entry));
     }
 
     @GetMapping("/number/{entryNumber}")
     public ResponseEntity<EntryResponseDto> getByEntryNumber(
             @PathVariable String entryNumber
     ) {
-        return entryService.findByEntryNumber(entryNumber)
-                .map(EntryResponseDto::from)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        var entry = entryService.findByEntryNumber(entryNumber)
+                .orElseThrow(() -> EntryNotFoundException.withEntryNumber(entryNumber));
+
+        return ResponseEntity.ok(EntryResponseDto.from(entry));
     }
 
     @GetMapping("/my-entries")
@@ -133,7 +86,7 @@ public class FinancialEntryController {
             @AuthenticationPrincipal User currentUser,
             @PageableDefault(size = 20, sort = "entryDate") Pageable pageable
     ) {
-        Page<FinancialEntry> entries = entryService.findByUser(currentUser, pageable);
+        var entries = entryService.findByUser(currentUser, pageable);
         return ResponseEntity.ok(entries.map(EntryResponseDto::from));
     }
 
@@ -142,7 +95,7 @@ public class FinancialEntryController {
     public ResponseEntity<Page<EntryResponseDto>> getAll(
             @PageableDefault(size = 20, sort = "entryDate") Pageable pageable
     ) {
-        Page<FinancialEntry> entries = entryService.findByDateRange(
+        var entries = entryService.findByDateRange(
                 LocalDate.now().minusMonths(1),
                 LocalDate.now(),
                 pageable
@@ -151,25 +104,57 @@ public class FinancialEntryController {
     }
 
     // ============================================
-    // UPDATE
+    // UPDATE OPERATIONS
     // ============================================
 
     @PutMapping("/{id}")
-    public ResponseEntity<EntryResponseDto> update(
+    public ResponseEntity<EntryResponseDto> updateEntry(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateEntryRequest request,
             @AuthenticationPrincipal User currentUser
     ) {
-        Money amount = Money.of(request.amount(), request.currency());
+        var command = requestMapper.toUpdateEntryCommand(id, request, currentUser);
+        var entry = entryService.updateEntry(command);
 
-        FinancialEntry entry = entryService.update(
+        return ResponseEntity.ok(EntryResponseDto.from(entry));
+    }
+
+    @PatchMapping("/{id}/context")
+    public ResponseEntity<EntryResponseDto> updateEntryContext(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateEntryContextRequest request,
+            @AuthenticationPrincipal User currentUser
+    ) {
+        var command = new FinancialEntryService.UpdateEntryContextCommand(
                 id,
-                request.categoryId(),
-                amount,
-                request.entryDate(),
-                request.description(),
+                request.whoId(),
+                request.mainCategoryId(),
+                request.recipient(),
+                request.country(),
+                request.city(),
+                request.specificLocation(),
+                request.vendor(),
                 currentUser
         );
+        var entry = entryService.updateEntryContext(command);
+
+        return ResponseEntity.ok(EntryResponseDto.from(entry));
+    }
+
+    @PatchMapping("/{id}/metadata")
+    public ResponseEntity<EntryResponseDto> updateEntryMetadata(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateEntryMetadataRequest request,
+            @AuthenticationPrincipal User currentUser
+    ) {
+        var command = new FinancialEntryService.UpdateEntryMetadataCommand(
+                id,
+                request.frequency(),
+                request.priority(),
+                request.tags(),
+                currentUser
+        );
+        var entry = entryService.updateEntryMetadata(command);
 
         return ResponseEntity.ok(EntryResponseDto.from(entry));
     }
@@ -180,181 +165,95 @@ public class FinancialEntryController {
             @Valid @RequestBody UpdateReceiptNumberRequest request,
             @AuthenticationPrincipal User currentUser
     ) {
-        FinancialEntry entry = entryService.updateReceiptNumber(
-                id,
-                request.receiptNumber(),
-                currentUser
+        var command = new FinancialEntryService.UpdateReceiptNumberCommand(
+                id, request.receiptNumber(), currentUser
         );
+        var entry = entryService.updateReceiptNumber(command);
 
         return ResponseEntity.ok(EntryResponseDto.from(entry));
     }
 
     @PatchMapping("/{id}/exchange-rate")
-    public ResponseEntity<EntryResponseDto> setExchangeRate(
+    public ResponseEntity<EntryResponseDto> updateExchangeRate(
             @PathVariable UUID id,
-            @Valid @RequestBody SetExchangeRateRequest request,
+            @Valid @RequestBody UpdateExchangeRateRequest request,
             @AuthenticationPrincipal User currentUser
     ) {
-        FinancialEntry entry = entryService.setExchangeRate(
-                id,
-                request.rate(),
-                request.rateDate(),
-                currentUser
+        var command = new FinancialEntryService.UpdateExchangeRateCommand(
+                id, request.rate(), request.rateDate(), currentUser
         );
+        var entry = entryService.updateExchangeRate(command);
 
         return ResponseEntity.ok(EntryResponseDto.from(entry));
     }
 
     // ============================================
-    // DELETE
+    // DELETE OPERATIONS
     // ============================================
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(
+    public ResponseEntity<Void> deleteEntry(
             @PathVariable UUID id,
             @AuthenticationPrincipal User currentUser
     ) {
-        entryService.delete(id, currentUser);
+        var command = new FinancialEntryService.DeleteEntryCommand(id, currentUser);
+        entryService.deleteEntry(command);
         return ResponseEntity.noContent().build();
     }
 
     // ============================================
-    // SEARCH
+    // SEARCH OPERATIONS
     // ============================================
 
     @GetMapping("/search")
-    public ResponseEntity<Page<EntryResponseDto>> search(
-            @RequestParam(required = false) UUID categoryId,
-            @RequestParam(required = false) EntryType entryType,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+    public ResponseEntity<Page<EntryResponseDto>> searchEntries(
+            @Valid EntrySearchRequest request,
             @PageableDefault(size = 20) Pageable pageable
     ) {
-        Page<FinancialEntry> entries = entryService.search(
-                categoryId,
-                entryType,
-                startDate,
-                endDate,
-                pageable
+        var criteria = new FinancialEntryService.EntrySearchCriteria(
+                request.categoryId(),
+                request.entryType(),
+                request.whoId(),
+                request.mainCategoryId(),
+                request.startDate(),
+                request.endDate()
         );
+        var entries = entryService.search(criteria, pageable);
 
         return ResponseEntity.ok(entries.map(EntryResponseDto::from));
     }
 
     @GetMapping("/search/text")
     public ResponseEntity<Page<EntryResponseDto>> searchByText(
-            @RequestParam String searchTerm,
-            @RequestParam(required = false) EntryType entryType,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @Valid TextSearchRequest request,
             @PageableDefault(size = 20) Pageable pageable
     ) {
-        Page<FinancialEntry> entries = entryService.searchByText(
-                searchTerm,
-                entryType,
-                startDate,
-                endDate,
-                pageable
+        var criteria = new FinancialEntryService.TextSearchCriteria(
+                request.searchTerm(),
+                request.entryType(),
+                request.startDate(),
+                request.endDate()
         );
+        var entries = entryService.searchByText(criteria, pageable);
 
         return ResponseEntity.ok(entries.map(EntryResponseDto::from));
     }
 
     // ============================================
-    // DASHBOARD & STATISTICS
+    // ATTACHMENT OPERATIONS
     // ============================================
-
-    @GetMapping("/dashboard/summary")
-    public ResponseEntity<DashboardSummary> getDashboardSummary(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
-    ) {
-        LocalDate start = startDate != null ? startDate : LocalDate.now().minusMonths(1);
-        LocalDate end = endDate != null ? endDate : LocalDate.now();
-
-        DashboardSummary summary =
-                entryService.getDashboardSummary(start, end);
-
-        return ResponseEntity.ok(summary);
-    }
-
-    @GetMapping("/dashboard/period-totals")
-    public ResponseEntity<List<FinancialEntryRepository.PeriodTotalProjection>> getPeriodTotals(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
-    ) {
-        return ResponseEntity.ok(entryService.getPeriodTotals(startDate, endDate));
-    }
-
-    @GetMapping("/dashboard/category-totals")
-    public ResponseEntity<List<FinancialEntryRepository.CategoryTotalProjection>> getCategoryTotals(
-            @RequestParam EntryType entryType,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
-    ) {
-        return ResponseEntity.ok(
-                entryService.getCategoryTotals(entryType, startDate, endDate)
-        );
-    }
-
-    @GetMapping("/dashboard/expense-totals")
-    public ResponseEntity<List<FinancialEntryRepository.CategoryTotalProjection>> getExpenseTotals(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
-    ) {
-        return ResponseEntity.ok(entryService.getExpenseTotals(startDate, endDate));
-    }
-
-    @GetMapping("/dashboard/income-totals")
-    public ResponseEntity<List<FinancialEntryRepository.CategoryTotalProjection>> getIncomeTotals(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
-    ) {
-        return ResponseEntity.ok(entryService.getIncomeTotals(startDate, endDate));
-    }
-
-    @GetMapping("/dashboard/monthly-totals")
-    public ResponseEntity<List<FinancialEntryRepository.MonthlyTotalProjection>> getMonthlyTotals(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
-    ) {
-        return ResponseEntity.ok(entryService.getMonthlyTotals(startDate, endDate));
-    }
-
-
-
-    // ATTACHMENT
 
     @PostMapping("/{id}/attachments")
     public ResponseEntity<AttachmentResponseDto> addAttachment(
             @PathVariable UUID id,
-            @RequestParam("file") MultipartFile file,
+            @Valid @RequestParam("file") MultipartFile file,
             @AuthenticationPrincipal User currentUser
     ) {
-        // Validation
-        if (!fileStorageService.isValidFileSize(file.getSize())) {
-            throw new IllegalArgumentException("File too large");
-        }
+        validateFile(file);
+        FinancialEntryAttachment attachment = createAttachment(file, currentUser);
 
-        if (!fileStorageService.isAllowedFileType(file.getContentType())) {
-            throw new IllegalArgumentException("File type not allowed");
-        }
-
-        // Store file
-        String storedFilename = fileStorageService.storeFile(file);
-
-        // Create attachment entity
-        FinancialEntryAttachment attachment = new FinancialEntryAttachment();
-        attachment.setFileName(storedFilename);
-        attachment.setOriginalFileName(file.getOriginalFilename());
-        attachment.setFilePath(fileStorageService.getFileStorageLocation() + "/" + storedFilename);
-        attachment.setFileSize(file.getSize());
-        attachment.setContentType(file.getContentType());
-        attachment.setUploadedBy(currentUser);
-        attachment.setUploadedAt(LocalDateTime.now());
-
-        // Add to entry
-        FinancialEntry entry = entryService.addAttachment(id, attachment, currentUser);
+        var command = new FinancialEntryService.AddAttachmentCommand(id, attachment, currentUser);
+        entryService.addAttachment(command);
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
@@ -366,24 +265,10 @@ public class FinancialEntryController {
             @PathVariable UUID id,
             @PathVariable UUID attachmentId
     ) {
-        // Get attachment
-        FinancialEntry entry = entryService.findById(id)
-                .orElseThrow(() -> EntryNotFoundException.withId(id));
+        var attachment = findAttachmentOrThrow(id, attachmentId);
+        var resource = fileStorageService.loadFileAsResource(attachment.getFileName());
 
-        FinancialEntryAttachment attachment = entry.getAttachments().stream()
-                .filter(a -> a.getId().equals(attachmentId))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Attachment not found"));
-
-        // Load file
-        Resource resource = fileStorageService.loadFileAsResource(attachment.getFileName());
-
-        // Return file
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + attachment.getOriginalFileName() + "\"")
-                .header(HttpHeaders.CONTENT_TYPE, attachment.getContentType())
-                .body(resource);
+        return createFileDownloadResponse(resource, attachment);
     }
 
     @DeleteMapping("/{id}/attachments/{attachmentId}")
@@ -392,86 +277,120 @@ public class FinancialEntryController {
             @PathVariable UUID attachmentId,
             @AuthenticationPrincipal User currentUser
     ) {
-        // Get attachment before deleting
-        FinancialEntry entry = entryService.findById(id)
-                .orElseThrow(() -> EntryNotFoundException.withId(id));
+        var attachment = findAttachmentOrThrow(id, attachmentId);
+        var command = new FinancialEntryService.RemoveAttachmentCommand(id, attachmentId, currentUser);
 
-        FinancialEntryAttachment attachment = entry.getAttachments().stream()
-                .filter(a -> a.getId().equals(attachmentId))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Attachment not found"));
-
-        // Remove from entry (domain)
-        entryService.removeAttachment(id, attachmentId, currentUser);
-
-        // Delete physical file
+        entryService.removeAttachment(command);
         fileStorageService.deleteFile(attachment.getFileName());
 
         return ResponseEntity.noContent().build();
     }
 
-    // DTOS
-    public record CreateEntryRequest(
-            @NotNull EntryType entryType,
-            @NotNull UUID categoryId,
-            @NotBlank String amount,
-            @NotBlank String currency,
-            @NotNull LocalDate entryDate,
-            String description
-    ) {}
+    // ============================================
+    // HELPER METHODS
+    // ============================================
 
-    public record CreateIncomeExpenseRequest(
-            @NotNull UUID categoryId,
-            @NotBlank String amount,
-            @NotBlank String currency,
-            @NotNull LocalDate entryDate,
-            String description
-    ) {}
+    private FinancialEntry findEntryOrThrow(UUID id) {
+        return entryService.findById(id)
+                .orElseThrow(() -> EntryNotFoundException.withId(id));
+    }
 
-    public record UpdateEntryRequest(
-            @NotNull UUID categoryId,
-            @NotBlank String amount,
-            @NotBlank String currency,
-            @NotNull LocalDate entryDate,
-            String description
-    ) {}
+    private FinancialEntryAttachment findAttachmentOrThrow(UUID entryId, UUID attachmentId) {
+        var entry = findEntryOrThrow(entryId);
 
-    public record UpdateReceiptNumberRequest(
-            String receiptNumber
-    ) {}
+        return entry.getAttachments().stream()
+                .filter(a -> a.getId().equals(attachmentId))
+                .findFirst()
+                .orElseThrow(() -> AttachmentNotFoundException.withId(attachmentId));
+    }
 
-    public record SetExchangeRateRequest(
-            @NotNull BigDecimal rate,
-            @NotNull LocalDate rateDate
-    ) {}
-
-    public record MoneyDto(String amount, String currency) {
-        public static MoneyDto from(Money money) {
-            return new MoneyDto(
-                    money.amount().toString(),
-                    money.currencyCode()
-            );
+    private void validateFile(MultipartFile file) {
+        if (!fileStorageService.isValidFileSize(file.getSize())) {
+            throw new IllegalArgumentException("File size exceeds limit");
+        }
+        if (!fileStorageService.isAllowedFileType(file.getContentType())) {
+            throw new IllegalArgumentException("File type not allowed");
         }
     }
 
-    // AttachmentResponseDto
-    public record AttachmentResponseDto(
-            UUID id,
-            String fileName,
-            String originalFileName,
-            Long fileSize,
-            String contentType,
-            LocalDateTime uploadedAt
+    private FinancialEntryAttachment createAttachment(MultipartFile file, User uploadedBy) {
+        String storedFilename = fileStorageService.storeFile(file);
+
+        return FinancialEntryAttachment.create(
+                storedFilename,
+                file.getOriginalFilename(),
+                fileStorageService.getFileStorageLocation() + "/" + storedFilename,
+                file.getSize(),
+                file.getContentType(),
+                uploadedBy
+        );
+    }
+
+    private ResponseEntity<Resource> createFileDownloadResponse(
+            Resource resource,
+            FinancialEntryAttachment attachment
     ) {
-        public static AttachmentResponseDto from(FinancialEntryAttachment attachment) {
-            return new AttachmentResponseDto(
-                    attachment.getId(),
-                    attachment.getFileName(),
-                    attachment.getOriginalFileName(),
-                    attachment.getFileSize(),
-                    attachment.getContentType(),
-                    attachment.getUploadedAt()
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + attachment.getOriginalFileName() + "\"")
+                .header(HttpHeaders.CONTENT_TYPE, attachment.getContentType())
+                .body(resource);
+    }
+
+    // ============================================
+    // INNER CLASS - REQUEST MAPPER
+    // ============================================
+
+    private static class EntryRequestMapper {
+
+        FinancialEntryService.CreateEntryCommand toCreateEntryCommand(
+                CreateEntryRequest request,
+                User creator
+        ) {
+            var moneyDto = new MoneyDto(request.amount(), request.currency());
+            var amount = moneyDto.toMoney();
+
+            return new FinancialEntryService.CreateEntryCommand(
+                    request.entryType(),
+                    request.categoryId(),
+                    amount,
+                    request.entryDate(),
+                    request.paymentMethod(),
+                    request.description(),
+                    creator,
+                    request.whoId(),
+                    request.mainCategoryId(),
+                    request.recipient(),
+                    request.country(),
+                    request.city(),
+                    request.specificLocation(),
+                    request.vendor()
+            );
+        }
+
+        FinancialEntryService.UpdateEntryCommand toUpdateEntryCommand(
+                UUID entryId,
+                UpdateEntryRequest request,
+                User updater
+        ) {
+            var moneyDto = new MoneyDto(request.amount(), request.currency());
+            var amount = moneyDto.toMoney();
+
+            return new FinancialEntryService.UpdateEntryCommand(
+                    entryId,
+                    request.entryType(),
+                    request.categoryId(),
+                    amount,
+                    request.entryDate(),
+                    request.paymentMethod(),
+                    request.description(),
+                    updater
             );
         }
     }
 }
+
+// ============================================
+// REQUEST DTOs (Updated with who and mainCategory)
+// ============================================
+
