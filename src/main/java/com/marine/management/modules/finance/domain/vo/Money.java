@@ -90,6 +90,43 @@ public class Money {
         return new Money(this.amount.abs(), this.currencyCode);
     }
 
+    // === CURRENCY CONVERSION ===
+
+    /**
+     * Convert this money to another currency using the given exchange rate
+     * @param rate Exchange rate (1 unit of this currency = rate units of target currency)
+     * @param targetCurrency Target currency code
+     * @return New Money in target currency
+     */
+    public Money convertUsing(BigDecimal rate, String targetCurrency) {
+        Objects.requireNonNull(rate, "Exchange rate cannot be null");
+        Objects.requireNonNull(targetCurrency, "Target currency cannot be null");
+
+        if (rate.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Exchange rate must be positive");
+        }
+
+        BigDecimal convertedAmount = this.amount
+                .multiply(rate)
+                .setScale(DEFAULT_SCALE, DEFAULT_ROUNDING);
+
+        return new Money(convertedAmount, targetCurrency);
+    }
+
+    /**
+     * Check if this money is in Euro currency
+     */
+    public boolean isEuro() {
+        return "EUR".equals(this.currencyCode);
+    }
+
+    /**
+     * Check if this money is in the specified currency
+     */
+    public boolean isCurrency(String currency) {
+        return this.currencyCode.equalsIgnoreCase(currency);
+    }
+
     // === QUERY METHODS ===
 
     public boolean isZero() {

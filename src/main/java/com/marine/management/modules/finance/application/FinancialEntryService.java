@@ -11,6 +11,8 @@ import com.marine.management.modules.finance.infrastructure.FinancialCategoryRep
 import com.marine.management.modules.finance.infrastructure.FinancialEntryRepository;
 import com.marine.management.modules.users.domain.User;
 import com.marine.management.shared.exceptions.EntryNotFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -25,19 +27,24 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class FinancialEntryService {
 
+    private static final Logger logger = LoggerFactory.getLogger(FinancialEntryService.class);
+
     private final FinancialEntryRepository entryRepository;
     private final FinancialCategoryRepository categoryRepository;
     private final EntryFactory entryFactory;
     private final EntryUpdater entryUpdater;
+    private final ExchangeRateService exchangeRateService;
 
     public FinancialEntryService(
             FinancialEntryRepository entryRepository,
-            FinancialCategoryRepository categoryRepository
+            FinancialCategoryRepository categoryRepository,
+            ExchangeRateService exchangeRateService
     ) {
         this.entryRepository = entryRepository;
         this.categoryRepository = categoryRepository;
         this.entryFactory = new EntryFactory(entryRepository, categoryRepository);
         this.entryUpdater = new EntryUpdater();
+        this.exchangeRateService = exchangeRateService;
     }
 
     // ============================================
@@ -46,7 +53,13 @@ public class FinancialEntryService {
 
     @Transactional
     public FinancialEntry createEntry(CreateEntryCommand command) {
+        // 1. Create entry (factory method)
         FinancialEntry entry = entryFactory.createEntry(command);
+
+        // 2. Calculate base amount (DOMAIN METHOD!) ✅
+        entry.calculateBaseAmount(exchangeRateService);
+
+        // 3. Save
         return entryRepository.saveAndFlush(entry);
     }
 
@@ -55,6 +68,7 @@ public class FinancialEntryService {
         FinancialEntry entry = findEntryOrThrow(command.entryId());
         FinancialCategory category = findCategoryOrThrow(command.categoryId());
 
+        // Update entry details
         entryUpdater.updateDetails(
                 entry,
                 command.entryType(),
@@ -65,6 +79,9 @@ public class FinancialEntryService {
                 command.description(),
                 command.updater()
         );
+
+        // Recalculate base amount (DOMAIN METHOD!) ✅
+        entry.calculateBaseAmount(exchangeRateService);
 
         return entry;
     }

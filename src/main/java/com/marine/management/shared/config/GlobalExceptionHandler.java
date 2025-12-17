@@ -37,6 +37,23 @@ public class GlobalExceptionHandler {
                         errorId));
     }
 
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalState(
+            IllegalStateException ex,
+            HttpServletRequest request
+    ) {
+        String errorId = UUID.randomUUID().toString();
+        logger.warn("Validation error [ID: {}] at {}: {}",
+                errorId, request.getRequestURI(), ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse(
+                        ex.getMessage(),  // ← "Category code cannot be empty"
+                        "VALIDATION_ERROR",
+                        errorId
+                ));
+    }
+
     @ExceptionHandler(AuthenticationFailedException.class)
     public ResponseEntity<ErrorResponse> handleAuthenticationFailed(AuthenticationFailedException ex, HttpServletRequest request){
         String errorId = UUID.randomUUID().toString();
@@ -63,9 +80,18 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleUserNotFound(UserNotFoundException ex, HttpServletRequest request){
         String errorId = UUID.randomUUID().toString();
         logger.info("User not found [ID: {}] at {}: {}", errorId, request.getRequestURI(), ex.getMessage());
+        if (request.getRequestURI().contains("/auth/")) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new ErrorResponse(
+                            "Invalid credentials",
+                            "AUTHENTICATION_FAILED",
+                            errorId));
+        }
+
+        // Admin panel'de user arama gibi durumlarda 404 dönebilir
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(new ErrorResponse(
-                        ex.getMessage(),
+                        "User not found",  // Genel mesaj
                         "USER_NOT_FOUND",
                         errorId));
     }

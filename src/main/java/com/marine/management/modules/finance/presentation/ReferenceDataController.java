@@ -1,6 +1,7 @@
 package com.marine.management.modules.finance.presentation;
 
 import com.marine.management.modules.finance.application.ReferenceDataService;
+import com.marine.management.modules.finance.presentation.dto.ReferenceDropdownData;
 import com.marine.management.modules.finance.presentation.dto.controller.MainCategoryDto;
 import com.marine.management.modules.finance.presentation.dto.controller.WhoDto;
 import org.springframework.http.ResponseEntity;
@@ -122,7 +123,3 @@ public class ReferenceDataController {
 // RESPONSE DTO
 // ============================================
 
-record ReferenceDropdownData(
-        List<MainCategoryDto> mainCategories,
-        List<WhoDto> whoList
-) {}

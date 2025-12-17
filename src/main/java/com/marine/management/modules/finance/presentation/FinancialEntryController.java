@@ -1,20 +1,17 @@
 package com.marine.management.modules.finance.presentation;
 
-import com.marine.management.modules.finance.application.FileStorageService;
+import com.marine.management.modules.finance.application.AttachmentService;
 import com.marine.management.modules.finance.application.FinancialEntryService;
-import com.marine.management.modules.finance.domain.entity.FinancialEntry;
-import com.marine.management.modules.finance.domain.entity.FinancialEntryAttachment;
+import com.marine.management.modules.finance.application.mapper.EntryRequestMapper;
 import com.marine.management.modules.finance.presentation.dto.*;
 import com.marine.management.modules.finance.presentation.dto.controller.*;
 import com.marine.management.modules.users.domain.User;
-import com.marine.management.shared.exceptions.AttachmentNotFoundException;
 import com.marine.management.shared.exceptions.EntryNotFoundException;
 import jakarta.validation.Valid;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -22,9 +19,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.marine.management.modules.finance.presentation.dto.controller.*;
-
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -32,16 +28,17 @@ import java.util.UUID;
 public class FinancialEntryController {
 
     private final FinancialEntryService entryService;
-    private final FileStorageService fileStorageService;
+    private final AttachmentService attachmentService;
     private final EntryRequestMapper requestMapper;
 
     public FinancialEntryController(
             FinancialEntryService entryService,
-            FileStorageService fileStorageService
+            AttachmentService attachmentService,
+            EntryRequestMapper requestMapper
     ) {
         this.entryService = entryService;
-        this.fileStorageService = fileStorageService;
-        this.requestMapper = new EntryRequestMapper();
+        this.attachmentService = attachmentService;
+        this.requestMapper = requestMapper;
     }
 
     // ============================================
@@ -67,7 +64,9 @@ public class FinancialEntryController {
 
     @GetMapping("/{id}")
     public ResponseEntity<EntryResponseDto> getById(@PathVariable UUID id) {
-        var entry = findEntryOrThrow(id);
+        var entry = entryService.findById(id)
+                .orElseThrow(() -> EntryNotFoundException.withId(id));
+
         return ResponseEntity.ok(EntryResponseDto.from(entry));
     }
 
@@ -243,154 +242,70 @@ public class FinancialEntryController {
     // ATTACHMENT OPERATIONS
     // ============================================
 
+    /**
+     * Add a single attachment to an entry
+     */
     @PostMapping("/{id}/attachments")
     public ResponseEntity<AttachmentResponseDto> addAttachment(
             @PathVariable UUID id,
-            @Valid @RequestParam("file") MultipartFile file,
+            @RequestParam("file") MultipartFile file,
             @AuthenticationPrincipal User currentUser
     ) {
-        validateFile(file);
-        FinancialEntryAttachment attachment = createAttachment(file, currentUser);
-
-        var command = new FinancialEntryService.AddAttachmentCommand(id, attachment, currentUser);
-        entryService.addAttachment(command);
+        var attachment = attachmentService.addAttachment(id, file, currentUser);
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(AttachmentResponseDto.from(attachment));
+                .body(attachment);
     }
 
+    /**
+     * Add multiple attachments to an entry
+     */
+    @PostMapping("/{id}/attachments/bulk")
+    public ResponseEntity<List<AttachmentResponseDto>> addAttachments(
+            @PathVariable UUID id,
+            @RequestParam("files") List<MultipartFile> files,
+            @AuthenticationPrincipal User currentUser
+    ) {
+        var attachments = attachmentService.addAttachments(id, files, currentUser);
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(attachments);
+    }
+
+    /**
+     * Get all attachments for an entry
+     */
+    @GetMapping("/{id}/attachments")
+    public ResponseEntity<List<AttachmentResponseDto>> getAttachments(
+            @PathVariable UUID id
+    ) {
+        var attachments = attachmentService.getAttachments(id);
+        return ResponseEntity.ok(attachments);
+    }
+
+    /**
+     * Download an attachment
+     */
     @GetMapping("/{id}/attachments/{attachmentId}/download")
     public ResponseEntity<Resource> downloadAttachment(
             @PathVariable UUID id,
             @PathVariable UUID attachmentId
     ) {
-        var attachment = findAttachmentOrThrow(id, attachmentId);
-        var resource = fileStorageService.loadFileAsResource(attachment.getFileName());
-
-        return createFileDownloadResponse(resource, attachment);
+        return attachmentService.downloadAttachment(id, attachmentId);
     }
 
+    /**
+     * Remove an attachment
+     */
     @DeleteMapping("/{id}/attachments/{attachmentId}")
     public ResponseEntity<Void> removeAttachment(
             @PathVariable UUID id,
             @PathVariable UUID attachmentId,
             @AuthenticationPrincipal User currentUser
     ) {
-        var attachment = findAttachmentOrThrow(id, attachmentId);
-        var command = new FinancialEntryService.RemoveAttachmentCommand(id, attachmentId, currentUser);
-
-        entryService.removeAttachment(command);
-        fileStorageService.deleteFile(attachment.getFileName());
-
+        attachmentService.removeAttachment(id, attachmentId, currentUser);
         return ResponseEntity.noContent().build();
     }
-
-    // ============================================
-    // HELPER METHODS
-    // ============================================
-
-    private FinancialEntry findEntryOrThrow(UUID id) {
-        return entryService.findById(id)
-                .orElseThrow(() -> EntryNotFoundException.withId(id));
-    }
-
-    private FinancialEntryAttachment findAttachmentOrThrow(UUID entryId, UUID attachmentId) {
-        var entry = findEntryOrThrow(entryId);
-
-        return entry.getAttachments().stream()
-                .filter(a -> a.getId().equals(attachmentId))
-                .findFirst()
-                .orElseThrow(() -> AttachmentNotFoundException.withId(attachmentId));
-    }
-
-    private void validateFile(MultipartFile file) {
-        if (!fileStorageService.isValidFileSize(file.getSize())) {
-            throw new IllegalArgumentException("File size exceeds limit");
-        }
-        if (!fileStorageService.isAllowedFileType(file.getContentType())) {
-            throw new IllegalArgumentException("File type not allowed");
-        }
-    }
-
-    private FinancialEntryAttachment createAttachment(MultipartFile file, User uploadedBy) {
-        String storedFilename = fileStorageService.storeFile(file);
-
-        return FinancialEntryAttachment.create(
-                storedFilename,
-                file.getOriginalFilename(),
-                fileStorageService.getFileStorageLocation() + "/" + storedFilename,
-                file.getSize(),
-                file.getContentType(),
-                uploadedBy
-        );
-    }
-
-    private ResponseEntity<Resource> createFileDownloadResponse(
-            Resource resource,
-            FinancialEntryAttachment attachment
-    ) {
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + attachment.getOriginalFileName() + "\"")
-                .header(HttpHeaders.CONTENT_TYPE, attachment.getContentType())
-                .body(resource);
-    }
-
-    // ============================================
-    // INNER CLASS - REQUEST MAPPER
-    // ============================================
-
-    private static class EntryRequestMapper {
-
-        FinancialEntryService.CreateEntryCommand toCreateEntryCommand(
-                CreateEntryRequest request,
-                User creator
-        ) {
-            var moneyDto = new MoneyDto(request.amount(), request.currency());
-            var amount = moneyDto.toMoney();
-
-            return new FinancialEntryService.CreateEntryCommand(
-                    request.entryType(),
-                    request.categoryId(),
-                    amount,
-                    request.entryDate(),
-                    request.paymentMethod(),
-                    request.description(),
-                    creator,
-                    request.whoId(),
-                    request.mainCategoryId(),
-                    request.recipient(),
-                    request.country(),
-                    request.city(),
-                    request.specificLocation(),
-                    request.vendor()
-            );
-        }
-
-        FinancialEntryService.UpdateEntryCommand toUpdateEntryCommand(
-                UUID entryId,
-                UpdateEntryRequest request,
-                User updater
-        ) {
-            var moneyDto = new MoneyDto(request.amount(), request.currency());
-            var amount = moneyDto.toMoney();
-
-            return new FinancialEntryService.UpdateEntryCommand(
-                    entryId,
-                    request.entryType(),
-                    request.categoryId(),
-                    amount,
-                    request.entryDate(),
-                    request.paymentMethod(),
-                    request.description(),
-                    updater
-            );
-        }
-    }
 }
-
-// ============================================
-// REQUEST DTOs (Updated with who and mainCategory)
-// ============================================
-

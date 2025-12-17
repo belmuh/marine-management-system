@@ -7,7 +7,7 @@ public record MainCategoryDto(
         String code,
         String nameTr,
         String nameEn,
-        Boolean isTechnical,
+        Boolean technical,
         Boolean active
 ) {
     public static MainCategoryDto from(MainCategory mainCategory) {

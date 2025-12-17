@@ -114,6 +114,10 @@ public class FileStorageService {
         FileValidation(Object value) { this.value = value; }
         public Object getValue() { return value; }
     }
+
+    public long getMaxFileSizeInMB() {
+        return (10 * 1024 * 1024) / (1024 * 1024); // bytes to MB
+    }
 }
 
 

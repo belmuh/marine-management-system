@@ -1,5 +1,7 @@
 package com.marine.management.modules.finance.domain.entity;
 
+import com.marine.management.modules.finance.application.ExchangeRateService;
+import com.marine.management.shared.exceptions.ExchangeRateCalculationException;
 import com.marine.management.modules.finance.domain.vo.EntryNumber;
 import com.marine.management.modules.finance.domain.enums.PaymentMethod;
 import com.marine.management.modules.finance.domain.enums.RecordType;
@@ -63,13 +65,13 @@ public class FinancialEntry {
 
     // === CONTEXTUAL DATA ===
     @Column(name = "who_id")
-    private Long whoId;  // Reference to Who entity (optional)
+    private Long whoId;
 
     @Column(name = "main_category_id")
-    private Long mainCategoryId;  // Reference to MainCategory entity (optional)
+    private Long mainCategoryId;
 
     @Column(name = "recipient", length = 50)
-    private String recipient; // For expense: "Crew", "Main Yacht" | For income: "Source"
+    private String recipient;
 
     @Column(name = "country", length = 50)
     private String country;
@@ -130,13 +132,7 @@ public class FinancialEntry {
         // JPA
     }
 
-    public void canBeEditedBy(User user) {
-        if (!this.createdBy.equals(user) && !Role.ADMIN.equals(user.getRole())) {
-            throw new SecurityException("User does not have permission to edit this entry");
-        }
-    }
-
-    // === SINGLE FACTORY METHOD ===
+    // === FACTORY METHOD ===
     public static FinancialEntry create(
             EntryNumber entryNumber,
             RecordType entryType,
@@ -167,7 +163,7 @@ public class FinancialEntry {
         entry.entryType = entryType;
         entry.category = category;
         entry.originalAmount = amount;
-        entry.baseAmount = amount;
+        entry.baseAmount = amount;  // Temporary, will be calculated
         entry.entryDate = entryDate;
         entry.paymentMethod = paymentMethod;
         entry.description = description;
@@ -188,7 +184,58 @@ public class FinancialEntry {
         return entry;
     }
 
+    // === DOMAIN METHODS - Exchange Rate ===
+
+    /**
+     * Calculate and set base amount (EUR) using exchange rate service
+     * This is a DOMAIN METHOD - business logic belongs in the domain!
+     */
+    public void calculateBaseAmount(ExchangeRateService exchangeRateService) {
+        Objects.requireNonNull(exchangeRateService, "Exchange rate service cannot be null");
+
+        // If already EUR, no conversion needed
+        if (this.originalAmount.isEuro()) {
+            this.baseAmount = this.originalAmount;
+            this.exchangeRate = BigDecimal.ONE;
+            this.exchangeRateDate = this.entryDate;
+            return;
+        }
+
+        try {
+            // Get exchange rate (lazy load from API if needed)
+            BigDecimal rate = exchangeRateService.getRate(
+                    this.entryDate,
+                    this.originalAmount.getCurrencyCode(),
+                    BASE_CURRENCY  // "EUR"
+            );
+
+            // Convert using Money's business method
+            this.baseAmount = this.originalAmount.convertUsing(rate, BASE_CURRENCY);
+            this.exchangeRate = rate;
+            this.exchangeRateDate = this.entryDate;
+
+        } catch (Exception e) {
+            throw new ExchangeRateCalculationException(
+                    String.format("Failed to calculate base amount for %s on %s",
+                            this.originalAmount.getCurrencyCode(),
+                            this.entryDate),
+                    e
+            );
+        }
+    }
+
+    /**
+     * Recalculate base amount (for exchange rate corrections)
+     */
+    public void recalculateBaseAmount(ExchangeRateService exchangeRateService, User updater) {
+        requireEditPermission(updater);
+
+        calculateBaseAmount(exchangeRateService);
+        updateAudit(updater);
+    }
+
     // === BUSINESS METHODS ===
+
     public void updateDetails(
             RecordType entryType,
             FinancialCategory category,
@@ -203,7 +250,6 @@ public class FinancialEntry {
         this.entryType = Objects.requireNonNull(entryType, "Entry type cannot be null");
         this.category = Objects.requireNonNull(category, "Category cannot be null");
         this.originalAmount = Objects.requireNonNull(amount, "Amount cannot be null");
-        this.baseAmount = amount;
         this.entryDate = Objects.requireNonNull(entryDate, "Entry date cannot be null");
         this.paymentMethod = Objects.requireNonNull(paymentMethod, "Payment method cannot be null");
         this.description = description;
@@ -266,16 +312,16 @@ public class FinancialEntry {
         this.exchangeRate = rate;
         this.exchangeRateDate = rateDate;
 
-        // Recalculate base amount
-        if (originalAmount != null) {
-            BigDecimal baseAmountValue = originalAmount.getAmount().multiply(rate);
-            this.baseAmount = Money.of(baseAmountValue, BASE_CURRENCY);
+        // Recalculate base amount using Money's convertUsing method
+        if (originalAmount != null && !originalAmount.isEuro()) {
+            this.baseAmount = this.originalAmount.convertUsing(rate, BASE_CURRENCY);
         }
 
         updateAudit(updater);
     }
 
     // === ATTACHMENT MANAGEMENT ===
+
     public void addAttachment(FinancialEntryAttachment attachment, User updater) {
         requireEditPermission(updater);
         Objects.requireNonNull(attachment, "Attachment cannot be null");
@@ -299,6 +345,7 @@ public class FinancialEntry {
     }
 
     // === DOMAIN CHECKS ===
+
     public boolean isIncome() {
         return this.entryType == RecordType.INCOME;
     }
@@ -327,7 +374,14 @@ public class FinancialEntry {
         return hasWho() && hasMainCategory();
     }
 
+    public void canBeEditedBy(User user) {
+        if (!this.createdBy.equals(user) && !Role.ADMIN.equals(user.getRole())) {
+            throw new SecurityException("User does not have permission to edit this entry");
+        }
+    }
+
     // === VALIDATION ===
+
     public void validate() {
         List<String> errors = new ArrayList<>();
 
@@ -351,6 +405,7 @@ public class FinancialEntry {
     }
 
     // === HELPER METHODS ===
+
     public String getFullLocation() {
         if (country == null && city == null && specificLocation == null) {
             return null;
@@ -371,6 +426,7 @@ public class FinancialEntry {
     }
 
     // === PRIVATE METHODS ===
+
     private void requireEditPermission(User user) {
         if (!this.createdBy.equals(user) && !Role.ADMIN.equals(user.getRole())) {
             throw new SecurityException("User does not have permission to edit this entry");

@@ -8,7 +8,10 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "main_categories")
+@Table(name = "main_categories",
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames = "code")
+        })
 public class MainCategory {
 
     @Id

@@ -5,6 +5,7 @@ import com.marine.management.modules.finance.infrastructure.MainCategoryReposito
 import com.marine.management.shared.config.GlobalExceptionHandler;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
@@ -12,6 +13,7 @@ import java.util.List;
 import org.slf4j.Logger;
 
 @Component
+@Order(1)
 public class MainCategoryDataLoader implements CommandLineRunner {
 
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
@@ -31,16 +33,20 @@ public class MainCategoryDataLoader implements CommandLineRunner {
         logger.info("Loading main category seed data...");
 
         List<MainCategory> categories = Arrays.asList(
-                createCategory("CREW_EXPENSES", "Mürettebat Giderleri", "Crew Expenses", false),
+                createCategory("CREW_EXPENSES", "Personel Giderleri", "Crew Expenses", false),
                 createCategory("MAINTENANCE", "Bakım ve Onarım", "Maintenance & Repair", true),
                 createCategory("GUEST", "Misafir Giderleri", "Guest Expenses", false),
-                createCategory("OWNER", "Mal Sahibi Giderleri", "Owner Expenses", false),
+                createCategory("OWNER", "Tekne Sahibi Giderleri", "Owner Expenses", false),
                 createCategory("OPERATIONAL", "Operasyonel Giderler", "Operational Expenses", false),
                 createCategory("FUEL", "Yakıt", "Fuel", true),
-                createCategory("PROVISIONS", "İaşe", "Provisions", false)
+                createCategory("PROVISIONS", "Kumanya / Erzak", "Provisions", false)
         );
 
         mainCategoryRepository.saveAll(categories);
+        // MAIN CATEGORY - WHO LINK
+        categories.forEach(category -> {
+            DataLoaderSharedData.addMainCategory(category.getCode(), category.getId());
+        });
         logger.info("Main category seed data loaded successfully: {} categories", categories.size());
     }
 

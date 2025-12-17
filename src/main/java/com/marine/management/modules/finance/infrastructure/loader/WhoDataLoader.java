@@ -1,5 +1,6 @@
 package com.marine.management.modules.finance.infrastructure.loader;
 
+import com.marine.management.modules.finance.domain.entity.MainCategory;
 import com.marine.management.modules.finance.domain.entity.Who;
 import com.marine.management.modules.finance.infrastructure.WhoRepository;
 import com.marine.management.shared.config.GlobalExceptionHandler;
@@ -33,23 +34,23 @@ public class WhoDataLoader implements CommandLineRunner {
 
         List<Who> whoList = Arrays.asList(
                 // NON_TECHNICAL
-                createWho("CREW", "Mürettebat", "Crew", false, null),
-                createWho("CAPTAIN", "Kaptan", "Captain", false, null),
-                createWho("GUEST", "Misafir", "Guest", false, null),
-                createWho("OWNER", "Mal Sahibi", "Owner", false, null),
-                createWho("MARINA", "Marina", "Marina", false, null),
-                createWho("OFFICE", "Ofis", "Office", false, null),
+                createWho("CREW", "Personel", "Crew", false, DataLoaderSharedData.getMainCategoryId("CREW_EXPENSES")),
+                createWho("CAPTAIN", "Kaptan", "Captain", false, DataLoaderSharedData.getMainCategoryId("CREW_EXPENSES")),
+                createWho("GUEST", "Misafir", "Guest", false, DataLoaderSharedData.getMainCategoryId("GUEST")),
+                createWho("OWNER", "Tekne Sahibi", "Owner", false, DataLoaderSharedData.getMainCategoryId("OWNER")),
+                createWho("MARINA", "Marina", "Marina", false, DataLoaderSharedData.getMainCategoryId("OPERATIONAL")),
+                createWho("OFFICE", "Ofis", "Office", false, DataLoaderSharedData.getMainCategoryId("OPERATIONAL")),
 
                 // TECHNICAL
                 createWho("YACHT", "Yat", "Yacht", true, null),
-                createWho("MAIN_ENGINE", "Ana Makine", "Main Engine", true, null),
-                createWho("GENERATOR", "Jeneratör", "Generator", true, null),
-                createWho("TENDER", "Tender", "Tender", true, null),
-                createWho("JETSKI", "Jetski", "Jetski", true, null),
-                createWho("WATERMAKER", "Su Yapıcı", "Watermaker", true, null),
-                createWho("AC_SYSTEM", "Klima Sistemi", "AC System", true, null),
-                createWho("ELECTRICAL", "Elektrik", "Electrical", true, null),
-                createWho("PLUMBING", "Tesisat", "Plumbing", true, null)
+                createWho("MAIN_ENGINE", "Ana Makine", "Main Engine", true, DataLoaderSharedData.getMainCategoryId("MAINTENANCE")),
+                createWho("GENERATOR", "Jeneratör", "Generator", true, DataLoaderSharedData.getMainCategoryId("MAINTENANCE")),
+                createWho("TENDER", "Tender", "Tender", true, DataLoaderSharedData.getMainCategoryId("MAINTENANCE")),
+                createWho("JETSKI", "Jetski", "Jetski", true, DataLoaderSharedData.getMainCategoryId("MAINTENANCE")),
+                createWho("WATERMAKER", "Su Yapıcı", "Watermaker", true, DataLoaderSharedData.getMainCategoryId("MAINTENANCE")),
+                createWho("AC_SYSTEM", "Klima Sistemi", "AC System", true, DataLoaderSharedData.getMainCategoryId("MAINTENANCE")),
+                createWho("ELECTRICAL", "Elektrik", "Electrical", true, DataLoaderSharedData.getMainCategoryId("MAINTENANCE")),
+                createWho("PLUMBING", "Tesisat", "Plumbing", true, DataLoaderSharedData.getMainCategoryId("MAINTENANCE"))
         );
 
         whoRepository.saveAll(whoList);
