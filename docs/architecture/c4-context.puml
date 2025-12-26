@@ -1,0 +1,16 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+title Marine Management System - System Context
+
+Person(admin, "Administrator", "Manages the system")
+Person(captain, "Ship Captain", "Operates and reports status")
+
+System(mms, "Marine Management System", "Manages ships, finances and documents")
+System_Ext(gis, "External GIS", "Mapping services")
+
+Rel(admin, mms, "Uses")
+Rel(captain, mms, "Uses")
+Rel(mms, gis, "Requests maps", "HTTPS")
+
+@enduml

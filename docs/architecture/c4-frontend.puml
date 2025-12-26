@@ -1,0 +1,31 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title Web Application - Component Diagram (Frontend)
+
+Container(api, "Backend API", "Spring Boot", "Business logic")
+
+Container_Boundary(webapp, "Web Application") {
+    Component(auth_module, "Auth Module", "Angular", "Login/Logout UI")
+    Component(finance_module, "Finance Module", "Angular", "Expense/Income management")
+    Component(reports_module, "Reports Module", "Angular", "Tree & Pivot reports")
+    Component(attachment_module, "Attachment Module", "Angular", "File upload/preview")
+
+    Component(auth_store, "Auth Store", "Angular Signals", "User state management")
+    Component(finance_store, "Finance Store", "Angular Signals", "Finance state")
+    Component(report_store, "Report Store", "Angular Signals", "Report state")
+
+    Component(api_service, "API Service", "HttpClient", "HTTP communication")
+}
+
+Rel(auth_module, auth_store, "Uses")
+Rel(finance_module, finance_store, "Uses")
+Rel(reports_module, report_store, "Uses")
+
+Rel(auth_store, api_service, "Uses")
+Rel(finance_store, api_service, "Uses")
+Rel(report_store, api_service, "Uses")
+
+Rel(api_service, api, "Makes API calls", "JSON/HTTPS")
+
+@enduml

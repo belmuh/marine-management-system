@@ -1,0 +1,51 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title Backend API - Component Diagram
+
+Container(webapp, "Web Application", "Angular 20", "User interface")
+ContainerDb(db, "Database", "PostgreSQL", "Data storage")
+Container(file_storage, "File Storage", "Local/S3", "File storage")
+
+Container_Boundary(api, "Backend API") {
+    Component(auth_controller, "Authentication Controller", "Spring MVC", "Handles login/logout")
+    Component(finance_controller, "Finance Controller", "Spring MVC", "Expense/Income endpoints")
+    Component(report_controller, "Report Controller", "Spring MVC", "Report generation endpoints")
+    Component(attachment_controller, "Attachment Controller", "Spring MVC", "File upload/download")
+
+    Component(auth_service, "Authentication Service", "Spring Security", "User authentication & authorization")
+    Component(finance_service, "Finance Service", "Spring Boot", "Financial entry business logic")
+    Component(tree_report_gen, "Tree Report Generator", "Spring Boot", "Hierarchical report generation")
+    Component(pivot_report_gen, "Pivot Report Generator", "Spring Boot", "Pivot table report generation")
+    Component(attachment_service, "Attachment Service", "Spring Boot", "File management logic")
+
+    Component(entry_repo, "Entry Repository", "Spring Data JPA", "Financial entry data access")
+    Component(category_repo, "Category Repository", "Spring Data JPA", "Category data access")
+    Component(user_repo, "User Repository", "Spring Data JPA", "User data access")
+}
+
+Rel(webapp, auth_controller, "Makes API calls", "JSON/HTTPS")
+Rel(webapp, finance_controller, "Makes API calls", "JSON/HTTPS")
+Rel(webapp, report_controller, "Makes API calls", "JSON/HTTPS")
+Rel(webapp, attachment_controller, "Makes API calls", "JSON/HTTPS")
+
+Rel(auth_controller, auth_service, "Uses")
+Rel(finance_controller, finance_service, "Uses")
+Rel(report_controller, tree_report_gen, "Uses")
+Rel(report_controller, pivot_report_gen, "Uses")
+Rel(attachment_controller, attachment_service, "Uses")
+
+Rel(auth_service, user_repo, "Uses")
+Rel(finance_service, entry_repo, "Uses")
+Rel(finance_service, category_repo, "Uses")
+Rel(tree_report_gen, entry_repo, "Uses")
+Rel(tree_report_gen, category_repo, "Uses")
+Rel(pivot_report_gen, entry_repo, "Uses")
+Rel(pivot_report_gen, category_repo, "Uses")
+Rel(attachment_service, file_storage, "Stores/Retrieves", "File I/O")
+
+Rel(entry_repo, db, "Reads/Writes", "JPA/JDBC")
+Rel(category_repo, db, "Reads/Writes", "JPA/JDBC")
+Rel(user_repo, db, "Reads/Writes", "JPA/JDBC")
+
+@enduml

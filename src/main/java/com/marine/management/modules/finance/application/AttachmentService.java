@@ -13,6 +13,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -166,9 +168,20 @@ public class AttachmentService {
             Resource resource,
             FinancialEntryAttachment attachment
     ) {
+        String encodedFilename;
+        try {
+            encodedFilename = URLEncoder.encode(
+                    attachment.getOriginalFileName(),
+                    StandardCharsets.UTF_8
+            ).replace("+", "%20");
+        } catch (Exception e) {
+            // Fallback: ASCII-safe filename
+            encodedFilename = attachment.getOriginalFileName()
+                    .replaceAll("[^a-zA-Z0-9._-]", "_");
+        }
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + attachment.getOriginalFileName() + "\"")
+                        "attachment; filename*=UTF-8''" + encodedFilename)  // ✅ RFC 5987
                 .header(HttpHeaders.CONTENT_TYPE, attachment.getContentType())
                 .body(resource);
     }

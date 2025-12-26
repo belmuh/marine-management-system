@@ -1,0 +1,72 @@
+@startuml
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+title Marine Management System - System Context
+
+Person(admin, "Administrator", "Manages the system")
+Person(captain, "Ship Captain", "Operates and reports status")
+
+System(mms, "Marine Management System", "Manages ships, finances and documents")
+System_Ext(gis, "External GIS", "Mapping services")
+
+Rel(admin, mms, "Uses")
+Rel(captain, mms, "Uses")
+Rel(mms, gis, "Requests maps", "HTTPS")
+@enduml
+
+@startuml
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title Marine Management System - Container View
+
+Person(admin, "Administrator")
+Person(captain, "Ship Captain")
+
+System_Boundary(mms_boundary, "Marine Management System") {
+  Container(web, "Web App", "Single Page App (React)", "UI for administrators and captains")
+  Container(api, "API", "Spring Boot", "Business logic, authentication, report generation")
+  ContainerDb(db, "Database", "PostgreSQL", "Persists domain data")
+  Container(storage, "Document Storage", "S3 / Object Storage", "Stores attachments and generated reports")
+}
+
+System_Ext(gis, "External GIS")
+
+Rel(admin, web, "Uses")
+Rel(captain, web, "Uses")
+Rel(web, api, "Calls", "HTTPS / JSON")
+Rel(api, db, "Reads/Writes", "JDBC")
+Rel(api, storage, "Stores/Retrieves files", "S3 API")
+Rel(api, gis, "Requests maps", "HTTPS")
+@enduml
+
+@startuml
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title Marine Management System - API Component View
+
+Container(api, "API", "Spring Boot", "Business logic, authentication, report generation")
+
+Component(authComp, "Auth Component", "Handles authentication and authorization")
+Component(reportController, "ReportController", "HTTP controller for reports and exports")
+Component(reportService, "ReportService", "Orchestrates report generation")
+Component(treeGen, "TreeReportGenerator", "Generates tree-structured finance reports")
+Component(pivotGen, "PivotTreeReportGenerator", "Generates pivot-style finance reports")
+Component(attachmentService, "AttachmentService", "Manages attachments and file uploads")
+Component(pdfGen, "PDF Generator", "Converts report models to PDF")
+Component(repo, "Repositories", "Data access layer")
+
+Rel(reportController, reportService, "Calls")
+Rel(reportService, treeGen, "Uses")
+Rel(reportService, pivotGen, "Uses")
+Rel(reportService, pdfGen, "Uses to create downloadable reports")
+Rel(reportService, attachmentService, "Uses to attach files")
+Rel(reportService, repo, "Reads/Writes report data")
+Rel(authComp, reportController, "Protects endpoints")
+
+' External interactions
+Person(admin, "Administrator")
+Person(captain, "Ship Captain")
+Rel(admin, reportController, "Requests reports")
+Rel(captain, reportController, "Requests reports")
+
+@enduml

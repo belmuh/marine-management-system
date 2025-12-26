@@ -1,0 +1,25 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title Marine Management System - Container Diagram
+
+Person(admin, "Administrator", "Manages the system")
+Person(captain, "Ship Captain", "Operates and reports status")
+
+System_Boundary(mms, "Marine Management System") {
+    Container(webapp, "Web Application", "Angular 20", "Provides UI for all users")
+    Container(api, "Backend API", "Spring Boot 3.2", "Handles business logic and data access")
+    ContainerDb(db, "Database", "PostgreSQL 16", "Stores financial entries, categories, ships")
+    Container(file_storage, "File Storage", "Local/S3", "Stores attachments and documents")
+}
+
+System_Ext(gis, "External GIS", "Mapping services")
+
+Rel(admin, webapp, "Uses", "HTTPS")
+Rel(captain, webapp, "Uses", "HTTPS")
+Rel(webapp, api, "Makes API calls", "JSON/HTTPS")
+Rel(api, db, "Reads/Writes", "JDBC")
+Rel(api, file_storage, "Stores/Retrieves files", "File I/O")
+Rel(api, gis, "Requests maps", "HTTPS")
+
+@enduml

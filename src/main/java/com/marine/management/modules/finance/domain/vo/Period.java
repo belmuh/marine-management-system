@@ -13,6 +13,12 @@ public record Period(LocalDate startDate, LocalDate endDate) {
         return new Period(startDate, endDate);
     }
 
+    public static Period ofMonth(int year, int month) {
+        LocalDate start = LocalDate.of(year, month, 1);
+        LocalDate end = start.withDayOfMonth(start.lengthOfMonth());
+        return new Period(start, end);
+    }
+
     public static Period ofYear(int year) {
         return new Period(
                 LocalDate.of(year, 1, 1),
@@ -55,5 +61,20 @@ public record Period(LocalDate startDate, LocalDate endDate) {
                     "Start date must be before or equal to end date"
             );
         }
+    }
+
+    // Yardımcı method - period string'den parse
+    public static Period parse(String periodStr, String periodType) {
+        if ("YEAR".equals(periodType)) {
+            int year = Integer.parseInt(periodStr);
+            return Period.ofYear(year);
+        } else if ("MONTH".equals(periodType)) {
+            // "2024-01" format
+            String[] parts = periodStr.split("-");
+            int year = Integer.parseInt(parts[0]);
+            int month = Integer.parseInt(parts[1]);
+            return Period.ofMonth(year, month);
+        }
+        throw new IllegalArgumentException("Invalid period format");
     }
 }
