@@ -2,13 +2,21 @@ package com.marine.management.modules.finance.presentation.dto.controller;
 
 import com.marine.management.modules.finance.domain.entity.MainCategory;
 
+/**
+ * DTO for MainCategory (global reference data).
+ *
+ * NOTE: No 'active' field - these are ISS standard categories.
+ * Tenants enable/disable via TenantMainCategory link table.
+ */
 public record MainCategoryDto(
         Long id,
         String code,
         String nameTr,
         String nameEn,
         Boolean technical,
-        Boolean active
+        Integer displayOrder,
+        String budgetGuidelineMin,
+        String budgetGuidelineMax
 ) {
     public static MainCategoryDto from(MainCategory mainCategory) {
         return new MainCategoryDto(
@@ -17,7 +25,9 @@ public record MainCategoryDto(
                 mainCategory.getNameTr(),
                 mainCategory.getNameEn(),
                 mainCategory.getTechnical(),
-                mainCategory.getActive()
+                mainCategory.getDisplayOrder(),
+                mainCategory.getBudgetGuidelineMin(),
+                mainCategory.getBudgetGuidelineMax()
         );
     }
 }

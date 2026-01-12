@@ -2,14 +2,19 @@ package com.marine.management.modules.finance.presentation.dto.controller;
 
 import com.marine.management.modules.finance.domain.entity.Who;
 
+/**
+ * DTO for Who entity (global reference data).
+ *
+ * NOTE: No 'active' field - these are ISS standard WHO entries.
+ * Tenants enable/disable via TenantWhoSelection link table.
+ */
 public record WhoDto(
         Long id,
         String code,
         String nameTr,
         String nameEn,
         Boolean technical,
-        Long suggestedMainCategoryId,
-        Boolean active
+        Long suggestedMainCategoryId
 ) {
     public static WhoDto from(Who who) {
         return new WhoDto(
@@ -18,8 +23,7 @@ public record WhoDto(
                 who.getNameTr(),
                 who.getNameEn(),
                 who.getTechnical(),
-                who.getSuggestedMainCategoryId(),
-                who.getActive()
+                who.getSuggestedMainCategoryId()
         );
     }
 }

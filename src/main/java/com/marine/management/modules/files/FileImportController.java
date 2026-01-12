@@ -20,12 +20,12 @@ public class FileImportController {
     public FileImportController(DataImportService dataImportService) {
         this.dataImportService = dataImportService;
     }
-
+/*
     @PostMapping("/import")
     public ImportResultDto importExcel(
             @RequestParam("file") MultipartFile file,
             @AuthenticationPrincipal User user
     ) throws IOException {
         return dataImportService.importFromExcel(file, user);
-    }
+    }*/
 }

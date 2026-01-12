@@ -10,16 +10,25 @@ import com.marine.management.modules.auth.presentation.dto.LoginRequest;
 import com.marine.management.modules.auth.presentation.dto.RefreshTokenRequest;
 import com.marine.management.modules.auth.presentation.dto.RefreshTokenResponse;
 import com.marine.management.modules.users.domain.User;
+import com.marine.management.shared.security.PublicEndpoint;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * Authentication controller.
+ *
+ * PUBLIC ENDPOINTS:
+ * - /login: Authenticate user
+ * - /refresh: Refresh access token
+ *
+ * PROTECTED ENDPOINTS:
+ * - /me: Get current user profile
+ * - /logout: Invalidate refresh token
+ */
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
@@ -28,19 +37,27 @@ public class AuthController {
     private final RefreshTokenService refreshTokenService;
     private final JwtUtil jwtUtil;
 
-    public AuthController(AuthService authService,
-                          RefreshTokenService refreshTokenService,
-                          JwtUtil jwtUtil){
+    public AuthController(
+            AuthService authService,
+            RefreshTokenService refreshTokenService,
+            JwtUtil jwtUtil
+    ) {
         this.authService = authService;
         this.refreshTokenService = refreshTokenService;
         this.jwtUtil = jwtUtil;
     }
 
+    /**
+     * User login endpoint.
+     *
+     * PUBLIC: No authentication required.
+     */
     @PostMapping("/login")
-   // @RateLimit(limit = 5, duration = 15) // 15 dakikada 5 deneme
-    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request,
-                                              HttpServletRequest httpRequest) {
-
+    @PublicEndpoint(reason = "User authentication - creates JWT token")
+    public ResponseEntity<AuthResponse> login(
+            @Valid @RequestBody LoginRequest request,
+            HttpServletRequest httpRequest
+    ) {
         String ipAddress = httpRequest.getRemoteAddr();
         String userAgent = httpRequest.getHeader("User-Agent");
 
@@ -52,13 +69,19 @@ public class AuthController {
                 authResult.accessToken(),
                 authResult.refreshToken(),
                 authResult.accessTokenExpiry(),
-                authResult.refreshTokenExpiry());
+                authResult.refreshTokenExpiry()
+        );
 
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * Get current authenticated user profile.
+     *
+     * PROTECTED: Requires valid JWT token and tenant context.
+     */
     @GetMapping("/me")
-    public ResponseEntity<UserResponse> getCurrentUser(@AuthenticationPrincipal User user){
+    public ResponseEntity<UserResponse> getCurrentUser(@AuthenticationPrincipal User user) {
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
@@ -67,33 +90,43 @@ public class AuthController {
         return ResponseEntity.ok(userResponse);
     }
 
+    /**
+     * Refresh access token using refresh token.
+     *
+     * PUBLIC: Refresh token validation, no tenant context needed yet.
+     */
     @PostMapping("/refresh")
+    @PublicEndpoint(reason = "Token refresh - validates refresh token")
     public ResponseEntity<RefreshTokenResponse> refreshToken(
-            @RequestBody RefreshTokenRequest request) {
-
+            @RequestBody RefreshTokenRequest request
+    ) {
         try {
-            // Refresh token'ı doğrula
+            // Validate refresh token
             User user = refreshTokenService.validateRefreshToken(request.refreshToken());
 
-            // Yeni access token oluştur
+            // Generate new access token
             String newAccessToken = jwtUtil.generateToken(user);
 
-            RefreshTokenResponse response = new RefreshTokenResponse(newAccessToken, jwtUtil.getExpirationMs());
+            RefreshTokenResponse response = new RefreshTokenResponse(
+                    newAccessToken,
+                    jwtUtil.getExpirationMs()
+            );
 
             return ResponseEntity.ok(response);
 
         } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(null);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
         }
     }
 
+    /**
+     * Logout user by invalidating refresh token.
+     *
+     * PROTECTED: Requires authentication to logout.
+     */
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(@RequestBody RefreshTokenRequest request) {
         refreshTokenService.deleteRefreshToken(request.refreshToken());
         return ResponseEntity.ok().build();
     }
-
-
-
 }

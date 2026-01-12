@@ -51,15 +51,17 @@ public interface FinancialEntryRepository extends JpaRepository<FinancialEntry, 
     Page<FinancialEntry> findByCategory(FinancialCategory category, Pageable pageable);
 
     // WHO AND MAIN CATEGORY QUERIES
-    Page<FinancialEntry> findByWhoId(Long whoId, Pageable pageable);
-    List<FinancialEntry> findByWhoIdOrderByEntryDateDesc(Long whoId);
+    Page<FinancialEntry> findByTenantWho_Id(UUID whoId, Pageable pageable);
+    List<FinancialEntry> findByTenantWho_IdOrderByEntryDateDesc(UUID whoId);
 
-    Page<FinancialEntry> findByMainCategoryId(Long mainCategoryId, Pageable pageable);
-    List<FinancialEntry> findByMainCategoryIdOrderByEntryDateDesc(Long mainCategoryId);
+    Page<FinancialEntry> findByTenantMainCategory_Id(UUID mainCategoryId, Pageable pageable);
+    List<FinancialEntry> findByTenantMainCategory_IdOrderByEntryDateDesc(UUID mainCategoryId);
 
-    // Combined who + main category
-    Page<FinancialEntry> findByWhoIdAndMainCategoryId(Long whoId, Long mainCategoryId, Pageable pageable);
-
+    Page<FinancialEntry> findByTenantWho_IdAndTenantMainCategory_Id(
+            UUID whoId,
+            UUID mainCategoryId,
+            Pageable pageable
+    );
 
     // DASHBOARD METRICS
 
@@ -96,15 +98,17 @@ public interface FinancialEntryRepository extends JpaRepository<FinancialEntry, 
     }
 
     // Who-based totals (for yacht-specific analytics)
-    @Query("SELECT e.whoId as whoId, " +
-            "SUM(e.baseAmount.amount) as total, " +
-            "COUNT(e.id) as entryCount " +
-            "FROM FinancialEntry e " +
-            "WHERE e.entryType = :entryType " +
-            "AND e.whoId IS NOT NULL " +
-            "AND e.entryDate BETWEEN :start AND :end " +
-            "GROUP BY e.whoId " +
-            "ORDER BY total DESC")
+    @Query("""
+        SELECT e.tenantWho.id as whoId, 
+               SUM(e.baseAmount.amount) as total, 
+               COUNT(e.id) as entryCount 
+        FROM FinancialEntry e 
+        WHERE e.entryType = :entryType 
+        AND e.tenantWho IS NOT NULL 
+        AND e.entryDate BETWEEN :start AND :end 
+        GROUP BY e.tenantWho.id 
+        ORDER BY total DESC
+    """)
     List<WhoTotalProjection> findWhoTotals(
             @Param("entryType") RecordType entryType,
             @Param("start") LocalDate start,
@@ -112,15 +116,17 @@ public interface FinancialEntryRepository extends JpaRepository<FinancialEntry, 
     );
 
     // Main Category totals (high-level grouping)
-    @Query("SELECT e.mainCategoryId as mainCategoryId, " +
-            "SUM(e.baseAmount.amount) as total, " +
-            "COUNT(e.id) as entryCount " +
-            "FROM FinancialEntry e " +
-            "WHERE e.entryType = :entryType " +
-            "AND e.mainCategoryId IS NOT NULL " +
-            "AND e.entryDate BETWEEN :start AND :end " +
-            "GROUP BY e.mainCategoryId " +
-            "ORDER BY total DESC")
+    @Query("""
+        SELECT e.tenantMainCategory.id as mainCategoryId, 
+               SUM(e.baseAmount.amount) as total, 
+               COUNT(e.id) as entryCount 
+        FROM FinancialEntry e 
+        WHERE e.entryType = :entryType 
+        AND e.tenantMainCategory IS NOT NULL 
+        AND e.entryDate BETWEEN :start AND :end 
+        GROUP BY e.tenantMainCategory.id 
+        ORDER BY total DESC
+    """)
     List<MainCategoryTotalProjection> findMainCategoryTotals(
             @Param("entryType") RecordType entryType,
             @Param("start") LocalDate start,
@@ -144,14 +150,16 @@ public interface FinancialEntryRepository extends JpaRepository<FinancialEntry, 
 
 
     // ADVANCED SEARCH (Updated with who and mainCategory)
-    @Query("SELECT e FROM FinancialEntry e WHERE " +
-            "(:categoryId IS NULL OR e.category.id = :categoryId) AND " +
-            "(:entryType IS NULL OR e.entryType = :entryType) AND " +
-            "(:whoId IS NULL OR e.whoId = :whoId) AND " +
-            "(:mainCategoryId IS NULL OR e.mainCategoryId = :mainCategoryId) AND " +
-            "e.entryDate >= COALESCE(:startDate, {d '1900-01-01'}) AND " +
-            "e.entryDate <= COALESCE(:endDate, {d '2100-12-31'}) " +
-            "ORDER BY e.entryDate DESC")
+    @Query("""
+        SELECT e FROM FinancialEntry e 
+        WHERE (:categoryId IS NULL OR e.category.id = :categoryId) 
+        AND (:entryType IS NULL OR e.entryType = :entryType) 
+        AND (:whoId IS NULL OR e.tenantWho.id = :whoId) 
+        AND (:mainCategoryId IS NULL OR e.tenantMainCategory.id = :mainCategoryId) 
+        AND e.entryDate >= COALESCE(:startDate, {d '1900-01-01'}) 
+        AND e.entryDate <= COALESCE(:endDate, {d '2100-12-31'}) 
+        ORDER BY e.entryDate DESC
+    """)
     Page<FinancialEntry> search(
             @Param("categoryId") UUID categoryId,
             @Param("entryType") RecordType entryType,
@@ -205,16 +213,18 @@ public interface FinancialEntryRepository extends JpaRepository<FinancialEntry, 
     );
 
     // Main Category breakdown by month (for high-level reports)
-    @Query("SELECT e.mainCategoryId as mainCategoryId, " +
-            "EXTRACT(MONTH FROM e.entryDate) as month, " +
-            "SUM(e.baseAmount.amount) as total, " +
-            "COUNT(e.id) as entryCount " +
-            "FROM FinancialEntry e " +
-            "WHERE e.entryType = :entryType " +
-            "AND e.mainCategoryId IS NOT NULL " +
-            "AND EXTRACT(YEAR FROM e.entryDate) = :year " +
-            "GROUP BY e.mainCategoryId, EXTRACT(MONTH FROM e.entryDate) " +
-            "ORDER BY mainCategoryId, month")
+    @Query("""
+        SELECT e.tenantMainCategory.id as mainCategoryId, 
+               EXTRACT(MONTH FROM e.entryDate) as month, 
+               SUM(e.baseAmount.amount) as total, 
+               COUNT(e.id) as entryCount 
+        FROM FinancialEntry e 
+        WHERE e.entryType = :entryType 
+        AND e.tenantMainCategory IS NOT NULL 
+        AND EXTRACT(YEAR FROM e.entryDate) = :year 
+        GROUP BY e.tenantMainCategory.id, EXTRACT(MONTH FROM e.entryDate) 
+        ORDER BY mainCategoryId, month
+    """)
     List<MainCategoryMonthBreakdownProjection> findMainCategoryMonthBreakdown(
             @Param("entryType") RecordType entryType,
             @Param("year") int year
@@ -258,9 +268,12 @@ public interface FinancialEntryRepository extends JpaRepository<FinancialEntry, 
     );
 
     // Count detailed vs simple entries
-    @Query("SELECT COUNT(e) FROM FinancialEntry e " +
-            "WHERE e.whoId IS NOT NULL AND e.mainCategoryId IS NOT NULL " +
-            "AND e.entryDate BETWEEN :start AND :end")
+    @Query("""
+        SELECT COUNT(e) FROM FinancialEntry e 
+        WHERE e.tenantWho IS NOT NULL 
+        AND e.tenantMainCategory IS NOT NULL 
+        AND e.entryDate BETWEEN :start AND :end
+    """)
     long countDetailedEntries(
             @Param("start") LocalDate start,
             @Param("end") LocalDate end

@@ -1,130 +1,151 @@
 package com.marine.management.modules.finance.domain.entity;
 
 import jakarta.persistence.*;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import java.time.LocalDateTime;
+import java.util.Objects;
 
+/**
+ * Main category for financial classification (global reference data).
+ *
+ * DESIGN: NOT tenant-isolated (shared across all tenants)
+ * - ISS standard categories
+ * - TenantMainCategory links tenants to these categories
+ */
 @Entity
-@Table(name = "main_categories",
-        uniqueConstraints = {
-                @UniqueConstraint(columnNames = "code")
-        })
+@Table(name = "main_categories")
 public class MainCategory {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(unique = true, nullable = false, length = 50)
+    @Column(nullable = false, unique = true, length = 50)
     private String code;
 
-    @Column(nullable = false, length = 100)
+    @Column(name = "name_tr", nullable = false, length = 100)
     private String nameTr;
 
-    @Column(nullable = false, length = 100)
+    @Column(name = "name_en", nullable = false, length = 100)
     private String nameEn;
 
-    @Column(nullable = false)
-    private Boolean technical = false;
+    @Column(name = "is_technical", nullable = false)
+    private Boolean technical = true;
 
-    @Column(nullable = false)
-    private Boolean active = true;
+    @Column(name = "display_order")
+    private Integer displayOrder;
 
-    @CreatedDate
-    @Column(nullable = false, updatable = false)
+    @Column(name = "budget_guideline_min", length = 10)
+    private String budgetGuidelineMin;
+
+    @Column(name = "budget_guideline_max", length = 10)
+    private String budgetGuidelineMax;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @LastModifiedDate
-    @Column(nullable = false)
-    private LocalDateTime updatedAt;
+    protected MainCategory() {}
 
-    public MainCategory() {
-    }
+    /**
+     * Creates a new main category.
+     *
+     * @param code unique category code (e.g., "CREW_EXPENSES")
+     * @param nameTr Turkish name
+     * @param nameEn English name
+     * @param isTechnical technical expense flag
+     * @param displayOrder UI sort order
+     * @param budgetMin budget guideline minimum
+     * @param budgetMax budget guideline maximum
+     * @return new MainCategory instance
+     */
+    public static MainCategory create(
+            String code,
+            String nameTr,
+            String nameEn,
+            boolean isTechnical,
+            int displayOrder,
+            String budgetMin,
+            String budgetMax
+    ) {
+        MainCategory category = new MainCategory();
+        category.code = Objects.requireNonNull(code, "Code cannot be null").toUpperCase();
+        category.nameTr = Objects.requireNonNull(nameTr, "Turkish name cannot be null");
+        category.nameEn = Objects.requireNonNull(nameEn, "English name cannot be null");
+        category.technical = isTechnical;
+        category.displayOrder = displayOrder;
+        category.budgetGuidelineMin = budgetMin;
+        category.budgetGuidelineMax = budgetMax;
 
-    public MainCategory(Long id, String code, String nameTr, String nameEn, Boolean technical, Boolean active) {
-        this.id = id;
-        this.code = code;
-        this.nameTr = nameTr;
-        this.nameEn = nameEn;
-        this.technical = technical;
-        this.active = active;
+        category.validate();
+        return category;
     }
 
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
     }
 
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
+    private void validate() {
+        if (code == null || code.trim().isEmpty()) {
+            throw new IllegalArgumentException("Code cannot be empty");
+        }
+        if (code.length() > 50) {
+            throw new IllegalArgumentException("Code cannot exceed 50 characters");
+        }
+        if (nameTr == null || nameTr.trim().isEmpty()) {
+            throw new IllegalArgumentException("Turkish name cannot be empty");
+        }
+        if (nameEn == null || nameEn.trim().isEmpty()) {
+            throw new IllegalArgumentException("English name cannot be empty");
+        }
     }
 
-    public Long getId() {
-        return id;
+    // === BUSINESS METHODS ===
+
+    public void updateDetails(String nameTr, String nameEn, Boolean isTechnical) {
+        this.nameTr = Objects.requireNonNull(nameTr, "Turkish name cannot be null");
+        this.nameEn = Objects.requireNonNull(nameEn, "English name cannot be null");
+        this.technical = Objects.requireNonNull(isTechnical, "Technical flag cannot be null");
+        validate();
     }
 
-    public void setId(Long id) {
-        this.id = id;
+    public void updateBudgetGuidelines(String min, String max) {
+        this.budgetGuidelineMin = min;
+        this.budgetGuidelineMax = max;
     }
 
-    public String getCode() {
-        return code;
+    // === GETTERS & SETTERS ===
+
+    public Long getId() { return id; }
+    public String getCode() { return code; }
+    public void setCode(String code) { this.code = code; }
+    public String getNameTr() { return nameTr; }
+    public void setNameTr(String nameTr) { this.nameTr = nameTr; }
+    public String getNameEn() { return nameEn; }
+    public void setNameEn(String nameEn) { this.nameEn = nameEn; }
+    public Boolean getTechnical() { return technical; }
+    public void setTechnical(Boolean technical) { this.technical = technical; }
+    public Integer getDisplayOrder() { return displayOrder; }
+    public void setDisplayOrder(Integer displayOrder) { this.displayOrder = displayOrder; }
+    public String getBudgetGuidelineMin() { return budgetGuidelineMin; }
+    public void setBudgetGuidelineMin(String budgetGuidelineMin) { this.budgetGuidelineMin = budgetGuidelineMin; }
+    public String getBudgetGuidelineMax() { return budgetGuidelineMax; }
+    public void setBudgetGuidelineMax(String budgetGuidelineMax) { this.budgetGuidelineMax = budgetGuidelineMax; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof MainCategory that)) return false;
+        return Objects.equals(id, that.id);
     }
 
-    public void setCode(String code) {
-        this.code = code;
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
     }
 
-    public String getNameTr() {
-        return nameTr;
-    }
-
-    public void setNameTr(String nameTr) {
-        this.nameTr = nameTr;
-    }
-
-    public String getNameEn() {
-        return nameEn;
-    }
-
-    public void setNameEn(String nameEn) {
-        this.nameEn = nameEn;
-    }
-
-    public Boolean getActive() {
-        return active;
-    }
-
-    public void setActive(Boolean active) {
-        this.active = active;
-    }
-
-    public Boolean getTechnical() {
-        return technical;
-    }
-
-    public void setTechnical(Boolean technical) {
-        this.technical = technical;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(LocalDateTime updatedAt) {
-        this.updatedAt = updatedAt;
+    @Override
+    public String toString() {
+        return String.format("MainCategory{id=%d, code='%s', nameEn='%s'}", id, code, nameEn);
     }
 }

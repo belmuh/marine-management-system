@@ -20,7 +20,7 @@ import java.util.*;
 @Service
 @Transactional
 public class DataImportService {
-
+/*
     private final ExcelParserService excelParserService;
     private final FinancialCategoryRepository categoryRepository;
     private final FinancialEntryRepository entryRepository;
@@ -129,9 +129,7 @@ public class DataImportService {
     // INNER CLASSES (Single Responsibility)
     // ============================================
 
-    /**
-     * Determines category types based on Excel data
-     */
+
     private static class CategoryTypeDeterminer {
 
         public Map<String, RecordType> determineCategoryTypes(List<ExcelRow> rows) {
@@ -177,9 +175,8 @@ public class DataImportService {
         }
     }
 
-    /**
-     * Helper class to count category usage
-     */
+    //Helper class to count category usage
+
     private static class CategoryUsageCounter {
         private final Map<String, Integer> incomeCount = new HashMap<>();
         private final Map<String, Integer> expenseCount = new HashMap<>();
@@ -208,9 +205,8 @@ public class DataImportService {
         }
     }
 
-    /**
-     * Creates or finds FinancialCategory entities
-     */
+    //Creates or finds FinancialCategory entities
+
     private static class CategoryProcessor {
 
         private final FinancialCategoryRepository categoryRepository;
@@ -332,9 +328,8 @@ public class DataImportService {
         }
     }
 
-    /**
-     * Generates category codes
-     */
+    //Generates category codes
+
     private static class CategoryCodeGenerator {
 
         public String generate(String categoryName) {
@@ -349,9 +344,8 @@ public class DataImportService {
         }
     }
 
-    /**
-     * Creates FinancialEntry entities
-     */
+    // Creates FinancialEntry entities
+
     private static class EntryCreator {
 
         private final Map<String, FinancialCategory> categoryMap;
@@ -478,5 +472,5 @@ public class DataImportService {
         public CategoryCreationException(String message, Throwable cause) {
             super(message, cause);
         }
-    }
+    }*/
 }

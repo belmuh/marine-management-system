@@ -1,79 +1,137 @@
 package com.marine.management.modules.finance.application;
 
-import com.marine.management.modules.finance.domain.entity.MainCategory;
-import com.marine.management.modules.finance.domain.entity.Who;
-import com.marine.management.modules.finance.infrastructure.MainCategoryRepository;
-import com.marine.management.modules.finance.infrastructure.WhoRepository;
+import com.marine.management.modules.finance.domain.entity.TenantMainCategory;
+import com.marine.management.modules.finance.domain.entity.TenantWhoSelection;
+import com.marine.management.modules.finance.infrastructure.TenantMainCategoryRepository;
+import com.marine.management.modules.finance.infrastructure.TenantWhoSelectionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Reference data service for tenant-specific selections.
+ *
+ * DESIGN:
+ * - Returns only active WHO and MainCategory choices for current tenant
+ * - Filtered automatically by TenantFilter (tenant_id)
+ * - Used by UI dropdowns and search filters
+ */
 @Service
 @Transactional(readOnly = true)
 public class ReferenceDataService {
 
-    private final MainCategoryRepository mainCategoryRepository;
-    private final WhoRepository whoRepository;
+    private final TenantMainCategoryRepository tenantMainCategoryRepository;
+    private final TenantWhoSelectionRepository tenantWhoSelectionRepository;
 
     public ReferenceDataService(
-            MainCategoryRepository mainCategoryRepository,
-            WhoRepository whoRepository
+            TenantMainCategoryRepository tenantMainCategoryRepository,
+            TenantWhoSelectionRepository tenantWhoSelectionRepository
     ) {
-        this.mainCategoryRepository = mainCategoryRepository;
-        this.whoRepository = whoRepository;
+        this.tenantMainCategoryRepository = tenantMainCategoryRepository;
+        this.tenantWhoSelectionRepository = tenantWhoSelectionRepository;
     }
 
     // ============================================
-    // MAIN CATEGORY QUERIES
+    // MAIN CATEGORY QUERIES (Tenant-Filtered)
     // ============================================
 
-    public List<MainCategory> getAllMainCategories() {
-        return mainCategoryRepository.findAll();
+    /**
+     * Get all active main categories for current tenant.
+     * Automatically filtered by tenant_id via Hibernate filter.
+     */
+    public List<TenantMainCategory> getActiveMainCategories() {
+        return tenantMainCategoryRepository.findByIsActiveTrue();
     }
 
-    public List<MainCategory> getActiveMainCategories() {
-        return mainCategoryRepository.findByActiveTrue();
+    /**
+     * Get active main categories by technical flag.
+     * @param technical true for technical (e.g. FUEL, MAINTENANCE), false for personal (e.g. CREW)
+     */
+    public List<TenantMainCategory> getActiveMainCategoriesByType(boolean technical) {
+        return tenantMainCategoryRepository.findByIsActiveTrueAndMainCategory_Technical(technical);
     }
 
-    public List<MainCategory> getMainCategoriesByType(boolean technical) {
-        return mainCategoryRepository.findByTechnical(technical);
+    /**
+     * Get tenant main category by ID.
+     */
+    public Optional<TenantMainCategory> getTenantMainCategoryById(Long id) {
+        return tenantMainCategoryRepository.findById(id);
     }
 
-    public Optional<MainCategory> getMainCategoryById(Long id) {
-        return mainCategoryRepository.findById(id);
-    }
-
-    public Optional<MainCategory> getMainCategoryByCode(String code) {
-        return mainCategoryRepository.findByCode(code);
+    /**
+     * Get tenant main category by global main category code.
+     * Useful for onboarding/initialization.
+     */
+    public Optional<TenantMainCategory> getTenantMainCategoryByCode(String code) {
+        return tenantMainCategoryRepository.findByMainCategory_Code(code);
     }
 
     // ============================================
-    // WHO QUERIES
+    // WHO QUERIES (Tenant-Filtered)
     // ============================================
 
-    public List<Who> getAllWho() {
-        return whoRepository.findAll();
+    /**
+     * Get all active WHO selections for current tenant.
+     * Automatically filtered by tenant_id via Hibernate filter.
+     */
+    public List<TenantWhoSelection> getActiveWhoSelections() {
+        return tenantWhoSelectionRepository.findByIsActiveTrue();
     }
 
-    public List<Who> getActiveWho() {
-        return whoRepository.findByActiveTrue();
+    /**
+     * Get active WHO selections by technical flag.
+     * @param technical true for equipment (e.g. MAIN_ENGINE), false for people (e.g. CAPTAIN)
+     */
+    public List<TenantWhoSelection> getActiveWhoSelectionsByType(boolean technical) {
+        return tenantWhoSelectionRepository.findByIsActiveTrueAndWho_Technical(technical);
     }
 
-    public List<Who> getWhoByType(boolean technical) {
-        return whoRepository.findByTechnicalIs(technical);
+    /**
+     * Get WHO selections suggested for a specific main category.
+     * Example: FUEL → [MAIN_ENGINE, GENERATOR, TENDER]
+     */
+    public List<TenantWhoSelection> getWhoSelectionsBySuggestedMainCategory(Long mainCategoryId) {
+        return tenantWhoSelectionRepository.findByIsActiveTrueAndWho_SuggestedMainCategoryId(mainCategoryId);
     }
 
-    public List<Who> getWhoBySuggestedMainCategory(Long mainCategoryId) {
-        return whoRepository.findBySuggestedMainCategoryId(mainCategoryId);
+    /**
+     * Get tenant WHO selection by ID.
+     */
+    public Optional<TenantWhoSelection> getTenantWhoSelectionById(Long id) {
+        return tenantWhoSelectionRepository.findById(id);
     }
 
-    public Optional<Who> getWhoById(Long id) {
-        return whoRepository.findById(id);
+    /**
+     * Get tenant WHO selection by global WHO code.
+     * Useful for onboarding/initialization.
+     */
+    public Optional<TenantWhoSelection> getTenantWhoSelectionByCode(String code) {
+        return tenantWhoSelectionRepository.findByWho_Code(code);
     }
 
-    public Optional<Who> getWhoByCode(String code) {
-        return whoRepository.findByCode(code);
+    // ============================================
+    // UTILITY METHODS
+    // ============================================
+
+    /**
+     * Check if tenant has enabled a specific main category.
+     */
+    public boolean isMainCategoryEnabled(String code) {
+        return tenantMainCategoryRepository
+                .findByMainCategory_Code(code)
+                .map(TenantMainCategory::getActive)
+                .orElse(false);
+    }
+
+    /**
+     * Check if tenant has enabled a specific WHO selection.
+     */
+    public boolean isWhoSelectionEnabled(String code) {
+        return tenantWhoSelectionRepository
+                .findByWho_Code(code)
+                .map(TenantWhoSelection::getActive)
+                .orElse(false);
     }
 }

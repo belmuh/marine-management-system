@@ -1,9 +1,8 @@
 package com.marine.management.modules.finance.application.mapper;
 
-import com.marine.management.modules.finance.application.FinancialEntryService;
+import com.marine.management.modules.finance.application.commands.*;
 import com.marine.management.modules.finance.presentation.dto.MoneyDto;
-import com.marine.management.modules.finance.presentation.dto.controller.CreateEntryRequest;
-import com.marine.management.modules.finance.presentation.dto.controller.UpdateEntryRequest;
+import com.marine.management.modules.finance.presentation.dto.controller.*;
 import com.marine.management.modules.users.domain.User;
 import org.springframework.stereotype.Component;
 
@@ -12,14 +11,14 @@ import java.util.UUID;
 @Component
 public class EntryRequestMapper {
 
-    public FinancialEntryService.CreateEntryCommand toCreateEntryCommand(
+    public CreateEntryCommand toCreateEntryCommand(
             CreateEntryRequest request,
             User creator
     ) {
         var moneyDto = new MoneyDto(request.amount(), request.currency());
         var amount = moneyDto.toMoney();
 
-        return new FinancialEntryService.CreateEntryCommand(
+        return new CreateEntryCommand(
                 request.entryType(),
                 request.categoryId(),
                 amount,
@@ -37,7 +36,7 @@ public class EntryRequestMapper {
         );
     }
 
-    public FinancialEntryService.UpdateEntryCommand toUpdateEntryCommand(
+    public UpdateEntryCommand toUpdateEntryCommand(
             UUID entryId,
             UpdateEntryRequest request,
             User updater
@@ -45,7 +44,7 @@ public class EntryRequestMapper {
         var moneyDto = new MoneyDto(request.amount(), request.currency());
         var amount = moneyDto.toMoney();
 
-        return new FinancialEntryService.UpdateEntryCommand(
+        return new UpdateEntryCommand(
                 entryId,
                 request.entryType(),
                 request.categoryId(),
@@ -53,7 +52,117 @@ public class EntryRequestMapper {
                 request.entryDate(),
                 request.paymentMethod(),
                 request.description(),
+                updater,
+                request.whoId(),
+                request.mainCategoryId(),
+                request.recipient(),
+                request.country(),
+                request.city(),
+                request.specificLocation(),
+                request.vendor(),
+                request.receiptNumber()
+
+
+        );
+    }
+
+    // ============================================
+    // PARTIAL UPDATES (Patch)
+    // ============================================
+
+    public UpdateEntryContextCommand toUpdateEntryContextCommand(
+            UUID entryId,
+            UpdateEntryContextRequest request,
+            User updater
+    ) {
+        return new UpdateEntryContextCommand(
+                entryId,
+                request.whoId(),
+                request.mainCategoryId(),
+                request.recipient(),
+                request.country(),
+                request.city(),
+                request.specificLocation(),
+                request.vendor(),
                 updater
+        );
+    }
+
+    public UpdateEntryMetadataCommand toUpdateEntryMetadataCommand(
+            UUID entryId,
+            UpdateEntryMetadataRequest request,
+            User updater
+    ) {
+        return new UpdateEntryMetadataCommand(
+                entryId,
+                request.frequency(),
+                request.priority(),
+                request.tags(),
+                updater
+        );
+    }
+
+    public UpdateReceiptNumberCommand toUpdateReceiptNumberCommand(
+            UUID entryId,
+            UpdateReceiptNumberRequest request,
+            User updater
+    ) {
+        return new UpdateReceiptNumberCommand(
+                entryId,
+                request.receiptNumber(),
+                updater
+        );
+    }
+
+    public UpdateExchangeRateCommand toUpdateExchangeRateCommand(
+            UUID entryId,
+            UpdateExchangeRateRequest request,
+            User updater
+    ) {
+        return new UpdateExchangeRateCommand(
+                entryId,
+                request.rate(),
+                request.rateDate(),
+                updater
+        );
+    }
+
+    // ============================================
+    // DELETE
+    // ============================================
+
+    public DeleteEntryCommand toDeleteEntryCommand(
+            UUID entryId,
+            User user
+    ) {
+        return new DeleteEntryCommand(entryId, user);
+    }
+
+    // ============================================
+    // SEARCH
+    // ============================================
+
+    public EntrySearchCriteria toEntrySearchCriteria(
+            EntrySearchRequest request
+    ) {
+        return new EntrySearchCriteria(
+                request.categoryId(),
+                request.entryType(),
+                request.whoId(),
+                request.mainCategoryId(),
+                request.startDate(),
+                request.endDate()
+        );
+    }
+
+    public TextSearchCriteria toTextSearchCriteria(
+            TextSearchRequest request
+    ) {
+        return new TextSearchCriteria(
+                request.searchTerm(),
+                request.entryType(),
+                request.startDate(),
+                request.endDate()
         );
     }
 }

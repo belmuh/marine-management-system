@@ -549,6 +549,21 @@ We welcome contributions! Please follow these steps:
 - **Frontend**: Angular Style Guide
 - **Commits**: Conventional Commits
 
+
+
+## Development Guidelines
+
+### Entity Changes
+Before modifying any entity, follow this checklist:
+
+1. Create Flyway migration FIRST
+2. Test migration on clean DB
+3. Update entity class SECOND
+4. Validate with Hibernate (ddl-auto=validate)
+5. Commit BOTH files together
+
+**Never commit entity without migration!**
+
 ---
 
 ## 📄 License

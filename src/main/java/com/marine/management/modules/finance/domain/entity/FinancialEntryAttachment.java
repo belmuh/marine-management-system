@@ -4,40 +4,72 @@ import com.marine.management.modules.users.domain.User;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 import java.util.UUID;
 
+/**
+ * Financial entry attachment entity.
+ *
+ * TENANT ISOLATION:
+ * - Does NOT extend BaseTenantEntity
+ * - Tenant isolation through parent FinancialEntry
+ * - Cascade operations inherit tenant context
+ *
+ * WHY NO BaseTenantEntity?
+ * - Attachment is child aggregate of FinancialEntry
+ * - Always accessed through parent entry
+ * - Never queried independently
+ * - Tenant isolation via parent's tenant_id
+ *
+ * @see FinancialEntry
+ */
 @Entity
-@Table(name = "financial_entry_attachments")
+@Table(
+        name = "financial_entry_attachments",
+        indexes = {
+                @Index(name = "idx_attachments_entry", columnList = "entry_id"),
+                @Index(name = "idx_attachments_uploaded_by", columnList = "uploaded_by")
+        }
+)
 public class FinancialEntryAttachment {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(columnDefinition = "UUID", updatable = false, nullable = false)
     private UUID id;
 
+    /**
+     * Parent financial entry.
+     *
+     * TENANT ISOLATION:
+     * - Entry has tenant_id
+     * - Attachment inherits tenant context through this relationship
+     * - Cascade operations maintain tenant isolation
+     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "entry_id", nullable = false)
     private FinancialEntry entry;
 
-    @Column(name = "file_name", nullable = false)
+    @Column(name = "file_name", nullable = false, length = 255)
     private String fileName;
 
-    @Column(name = "original_file_name", nullable = false)
+    @Column(name = "original_file_name", nullable = false, length = 255)
     private String originalFileName;
 
-    @Column(name = "file_path", nullable = false)
+    @Column(name = "file_path", nullable = false, length = 500)
     private String filePath;
 
     @Column(name = "file_size", nullable = false)
     private Long fileSize;
 
-    @Column(name = "content_type", nullable = false)
+    @Column(name = "content_type", nullable = false, length = 100)
     private String contentType;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "uploaded_by")
+    @JoinColumn(name = "uploaded_by", nullable = false)
     private User uploadedBy;
 
-    @Column(name = "uploaded_at")
+    @Column(name = "uploaded_at", nullable = false, updatable = false)
     private LocalDateTime uploadedAt;
 
     // === CONSTRUCTORS ===
@@ -46,6 +78,12 @@ public class FinancialEntryAttachment {
     }
 
     // === FACTORY METHOD ===
+    /**
+     * Creates a new attachment.
+     *
+     * NOTE: Attachment is NOT persisted until associated with entry.
+     * Entry association happens via entry.addAttachment().
+     */
     public static FinancialEntryAttachment create(
             String fileName,
             String originalFileName,
@@ -63,19 +101,33 @@ public class FinancialEntryAttachment {
         attachment.uploadedBy = uploadedBy;
         attachment.uploadedAt = LocalDateTime.now();
 
+        attachment.validate();
+
         return attachment;
     }
 
     // === BUSINESS METHODS ===
+
+    /**
+     * Associates attachment with parent entry.
+     *
+     * Called by FinancialEntry.addAttachment().
+     */
     public void associateWithEntry(FinancialEntry entry) {
         this.entry = entry;
     }
 
+    /**
+     * Dissociates attachment from parent entry.
+     *
+     * Called by FinancialEntry.removeAttachment().
+     */
     public void dissociateFromEntry() {
         this.entry = null;
     }
 
     // === DOMAIN CHECKS ===
+
     public boolean isImage() {
         return contentType != null && contentType.startsWith("image/");
     }
@@ -112,6 +164,7 @@ public class FinancialEntryAttachment {
     }
 
     // === VALIDATION ===
+
     public void validate() {
         if (fileName == null || fileName.isBlank()) {
             throw new IllegalStateException("File name is required");
@@ -134,6 +187,7 @@ public class FinancialEntryAttachment {
     }
 
     // === GETTERS ===
+
     public UUID getId() {
         return id;
     }
@@ -170,23 +224,24 @@ public class FinancialEntryAttachment {
         return uploadedAt;
     }
 
-    // === SETTERS ===
+    // === SETTERS (Package-private) ===
+
     void setEntry(FinancialEntry entry) {
         this.entry = entry;
     }
 
     // === EQUALS/HASHCODE ===
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof FinancialEntryAttachment)) return false;
-        FinancialEntryAttachment that = (FinancialEntryAttachment) o;
+        if (!(o instanceof FinancialEntryAttachment that)) return false;
         return id != null && id.equals(that.id);
     }
 
     @Override
     public int hashCode() {
-        return id != null ? id.hashCode() : 0;
+        return Objects.hashCode(id);
     }
 
     @Override

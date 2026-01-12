@@ -1,5 +1,7 @@
 package com.marine.management.modules.finance.application;
 
+import com.marine.management.modules.finance.application.commands.AddAttachmentCommand;
+import com.marine.management.modules.finance.application.commands.RemoveAttachmentCommand;
 import com.marine.management.modules.finance.domain.entity.FinancialEntry;
 import com.marine.management.modules.finance.domain.entity.FinancialEntryAttachment;
 import com.marine.management.modules.finance.presentation.dto.AttachmentResponseDto;
@@ -60,7 +62,7 @@ public class AttachmentService {
         FinancialEntryAttachment attachment = storeAndCreateAttachment(file, uploadedBy);
 
         // 3. Add to entry
-        var command = new FinancialEntryService.AddAttachmentCommand(
+        var command = new AddAttachmentCommand(
                 entryId,
                 attachment,
                 uploadedBy
@@ -107,7 +109,7 @@ public class AttachmentService {
         var attachment = findAttachmentOrThrow(entryId, attachmentId);
 
         // Remove from entry
-        var command = new FinancialEntryService.RemoveAttachmentCommand(
+        var command = new RemoveAttachmentCommand(
                 entryId,
                 attachmentId,
                 requestedBy

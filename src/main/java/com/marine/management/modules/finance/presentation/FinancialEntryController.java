@@ -2,6 +2,7 @@ package com.marine.management.modules.finance.presentation;
 
 import com.marine.management.modules.finance.application.AttachmentService;
 import com.marine.management.modules.finance.application.FinancialEntryService;
+import com.marine.management.modules.finance.application.commands.*;
 import com.marine.management.modules.finance.application.mapper.EntryRequestMapper;
 import com.marine.management.modules.finance.presentation.dto.*;
 import com.marine.management.modules.finance.presentation.dto.controller.*;
@@ -124,19 +125,8 @@ public class FinancialEntryController {
             @Valid @RequestBody UpdateEntryContextRequest request,
             @AuthenticationPrincipal User currentUser
     ) {
-        var command = new FinancialEntryService.UpdateEntryContextCommand(
-                id,
-                request.whoId(),
-                request.mainCategoryId(),
-                request.recipient(),
-                request.country(),
-                request.city(),
-                request.specificLocation(),
-                request.vendor(),
-                currentUser
-        );
+        var command = requestMapper.toUpdateEntryContextCommand(id, request, currentUser);
         var entry = entryService.updateEntryContext(command);
-
         return ResponseEntity.ok(EntryResponseDto.from(entry));
     }
 
@@ -146,15 +136,8 @@ public class FinancialEntryController {
             @Valid @RequestBody UpdateEntryMetadataRequest request,
             @AuthenticationPrincipal User currentUser
     ) {
-        var command = new FinancialEntryService.UpdateEntryMetadataCommand(
-                id,
-                request.frequency(),
-                request.priority(),
-                request.tags(),
-                currentUser
-        );
+        var command = requestMapper.toUpdateEntryMetadataCommand(id, request, currentUser);
         var entry = entryService.updateEntryMetadata(command);
-
         return ResponseEntity.ok(EntryResponseDto.from(entry));
     }
 
@@ -164,11 +147,8 @@ public class FinancialEntryController {
             @Valid @RequestBody UpdateReceiptNumberRequest request,
             @AuthenticationPrincipal User currentUser
     ) {
-        var command = new FinancialEntryService.UpdateReceiptNumberCommand(
-                id, request.receiptNumber(), currentUser
-        );
+        var command = requestMapper.toUpdateReceiptNumberCommand(id, request, currentUser);
         var entry = entryService.updateReceiptNumber(command);
-
         return ResponseEntity.ok(EntryResponseDto.from(entry));
     }
 
@@ -178,11 +158,8 @@ public class FinancialEntryController {
             @Valid @RequestBody UpdateExchangeRateRequest request,
             @AuthenticationPrincipal User currentUser
     ) {
-        var command = new FinancialEntryService.UpdateExchangeRateCommand(
-                id, request.rate(), request.rateDate(), currentUser
-        );
+        var command = requestMapper.toUpdateExchangeRateCommand(id, request, currentUser);
         var entry = entryService.updateExchangeRate(command);
-
         return ResponseEntity.ok(EntryResponseDto.from(entry));
     }
 
@@ -195,7 +172,7 @@ public class FinancialEntryController {
             @PathVariable UUID id,
             @AuthenticationPrincipal User currentUser
     ) {
-        var command = new FinancialEntryService.DeleteEntryCommand(id, currentUser);
+        var command = requestMapper.toDeleteEntryCommand(id, currentUser);
         entryService.deleteEntry(command);
         return ResponseEntity.noContent().build();
     }
@@ -209,16 +186,8 @@ public class FinancialEntryController {
             @Valid EntrySearchRequest request,
             @PageableDefault(size = 20) Pageable pageable
     ) {
-        var criteria = new FinancialEntryService.EntrySearchCriteria(
-                request.categoryId(),
-                request.entryType(),
-                request.whoId(),
-                request.mainCategoryId(),
-                request.startDate(),
-                request.endDate()
-        );
+        var criteria = requestMapper.toEntrySearchCriteria(request);
         var entries = entryService.search(criteria, pageable);
-
         return ResponseEntity.ok(entries.map(EntryResponseDto::from));
     }
 
@@ -227,14 +196,8 @@ public class FinancialEntryController {
             @Valid TextSearchRequest request,
             @PageableDefault(size = 20) Pageable pageable
     ) {
-        var criteria = new FinancialEntryService.TextSearchCriteria(
-                request.searchTerm(),
-                request.entryType(),
-                request.startDate(),
-                request.endDate()
-        );
+        var criteria = requestMapper.toTextSearchCriteria(request);
         var entries = entryService.searchByText(criteria, pageable);
-
         return ResponseEntity.ok(entries.map(EntryResponseDto::from));
     }
 

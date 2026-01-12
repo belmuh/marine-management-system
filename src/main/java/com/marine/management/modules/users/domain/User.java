@@ -1,22 +1,51 @@
 package com.marine.management.modules.users.domain;
 
-import com.marine.management.shared.kernel.security.Role;
+import com.marine.management.modules.organization.domain.Organization;
+import com.marine.management.shared.security.Role;
 import jakarta.persistence.*;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
-
-
+/**
+ * User entity implementing Spring Security UserDetails.
+ *
+ * WHY UserDetails?
+ * - Standard Spring Security interface
+ * - Clean integration with authentication system
+ * - No need for separate UserDetailsService adapter
+ * - Domain entity carries its own security context
+ */
 @Entity
-@Table(name="users")
-public class User {
+@Table(
+        name = "users",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uq_users_username", columnNames = "username"),
+                @UniqueConstraint(name = "uq_users_email", columnNames = "email")
+        },
+        indexes = {
+                @Index(name = "idx_users_username", columnList = "username"),
+                @Index(name = "idx_users_email", columnList = "email"),
+                @Index(name = "idx_users_organization", columnList = "organization_id")
+        }
+)
+public class User implements UserDetails {
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(columnDefinition = "UUID DEFAULT gen_random_uuid()", updatable = false, nullable = false)
+    @Column(columnDefinition = "UUID", updatable = false, nullable = false)
     private UUID id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "organization_id", nullable = false, updatable = false)
+    private Organization organization;
 
     @Column(unique = true, nullable = false, length = 50)
     private String username;
@@ -24,29 +53,37 @@ public class User {
     @Column(unique = true, nullable = false, length = 100)
     private String email;
 
+    @Column(name = "first_name", length = 50)
     private String firstName;
+
+    @Column(name = "last_name", length = 50)
     private String lastName;
 
     @Column(nullable = false)
     private String password;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 20)
     private Role role = Role.USER;
 
-    @Column(nullable = false)
+    @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
 
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    protected User(){}
 
-    private User(String username, String email, String password, Role role){
+    protected User() {}
+
+    private User(String username, String email, String password, Role role, Organization organization) {
         this.username = validateUsername(username);
         this.email = validateEmail(email);
         this.password = Objects.requireNonNull(password, "Password cannot be null");
         this.role = role;
+        this.organization = Objects.requireNonNull(organization, "Organization cannot be null");
     }
 
     @PrePersist
@@ -60,18 +97,64 @@ public class User {
         updatedAt = LocalDateTime.now();
     }
 
-    // === FACTORY METHOD (Static Factory Pattern) ===
+    // === FACTORY METHODS ===
 
-    public static User create(String username, String email, String plainPassword) {
-        return new User(username, email, plainPassword, Role.USER);
+    public static User create(String username, String email, String plainPassword, Organization organization) {
+        return new User(username, email, plainPassword, Role.USER, organization);
     }
 
-    public static User createWithRole(String username, String email, String plainPassword, Role role) {
-        return new User(username, email, plainPassword, role);
+    public static User createWithRole(String username, String email, String plainPassword, Role role, Organization organization) {
+        return new User(username, email, plainPassword, role, organization);
     }
 
-    public static User createWithHashedPassword(String username, String email, String hashedPassword, Role role) {
-        return new User(username, email, hashedPassword, role);
+    public static User createWithHashedPassword(String username, String email, String hashedPassword, Role role, Organization organization) {
+        return new User(username, email, hashedPassword, role, organization);
+    }
+
+    // === UserDetails IMPLEMENTATION ===
+
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        // Return role as authority
+        // Spring Security expects "ROLE_" prefix for hasRole() checks
+        // But we use hasAuthority() so no prefix needed
+        return List.of(new SimpleGrantedAuthority(role.name()));
+    }
+
+    @Override
+    public String getPassword() {
+        return password;
+    }
+
+    @Override
+    public String getUsername() {
+        return username;
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
+        return true;  // We don't track account expiration
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        return isActive;  // Locked = !isActive
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return true;  // We don't track credential expiration
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return isActive;
+    }
+
+    // === BUSINESS METHODS ===
+
+    public boolean isActive() {
+        return isActive;
     }
 
     public void activate() {
@@ -81,30 +164,49 @@ public class User {
     public void deactivate() {
         this.isActive = false;
     }
-    // === DOMAIN BUSINESS METHODS === (DDD Lite)
 
     public boolean canManageFinancialEntries() {
-        return role.canManageFinancialEntries();
+        return role.canCreateEntry();
+    }
+
+    public boolean canViewAllEntries() {
+        return role.canViewAllEntries();
+    }
+
+    public boolean canEditAnyEntry() {
+        return role.canEditAnyEntry();
+    }
+
+    public boolean canDeleteEntry() {
+        return role.canDeleteEntry();
     }
 
     public boolean canViewReports() {
         return role.canViewReports();
     }
 
+    public boolean canViewBudgets() {
+        return role.canViewBudgets();
+    }
+
     public boolean isAdmin() {
         return role.isAdmin();
     }
 
-    public boolean credentialsMatch(String inputPassword, PasswordEncoder encoder) {
-         return encoder.matches(inputPassword, this.password);
+    public boolean isSuperAdmin() {
+        return role.isSuperAdmin();
     }
 
-    public void updateProfile(String newUsername, String newEmail){
+    public boolean credentialsMatch(String inputPassword, PasswordEncoder encoder) {
+        return encoder.matches(inputPassword, this.password);
+    }
+
+    public void updateProfile(String newUsername, String newEmail) {
         this.username = validateUsername(newUsername);
         this.email = validateEmail(newEmail);
     }
 
-    public void changePassword(String newPassword){
+    public void changePassword(String newPassword) {
         this.password = Objects.requireNonNull(newPassword, "Password cannot be null");
     }
 
@@ -112,26 +214,26 @@ public class User {
         this.role = Objects.requireNonNull(newRole, "Role cannot be null");
     }
 
-    // === PRIVATE VALIDATION METHODS === (Clean Code)
+    // === VALIDATION ===
 
-    private String validateUsername(String username){
-        if(username == null || username.trim().isEmpty()){
+    private String validateUsername(String username) {
+        if (username == null || username.trim().isEmpty()) {
             throw new IllegalArgumentException("Username cannot be null or empty");
         }
-        if(username.length() < 3 || username.length() > 50){
+        if (username.length() < 3 || username.length() > 50) {
             throw new IllegalArgumentException("Username must be between 3 and 50 characters");
         }
-        if(!username.matches("^[a-zA-Z0-9_]+$")){
-            throw new IllegalArgumentException("username can only contain letters, numbers and underscores");
+        if (!username.matches("^[a-zA-Z0-9_]+$")) {
+            throw new IllegalArgumentException("Username can only contain letters, numbers and underscores");
         }
         return username.trim();
     }
 
-    private String validateEmail(String email){
-        if(email == null || email.trim().isEmpty()){
+    private String validateEmail(String email) {
+        if (email == null || email.trim().isEmpty()) {
             throw new IllegalArgumentException("Email cannot be null or empty");
         }
-        if(!email.matches("^[A-Za-z0-9+_.-]+@(.+)$")){
+        if (!email.matches("^[A-Za-z0-9+_.-]+@(.+)$")) {
             throw new IllegalArgumentException("Invalid email format");
         }
         return email.trim().toLowerCase();
@@ -139,51 +241,27 @@ public class User {
 
     // === GETTERS ===
 
-    public UUID getId() {
-        return id;
-    }
+    public UUID getId() { return id; }
+    public Organization getOrganization() { return organization; }
+    // getUsername() from UserDetails
+    public String getEmail() { return email; }
+    public Role getRole() { return role; }
+    // isActive() as isEnabled() from UserDetails
+    public String getFirstName() { return firstName; }
+    public String getLastName() { return lastName; }
 
-    public String getUsername() {
-        return username;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public Role getRole() {
-        return role;
-    }
-
-    public boolean isActive() {
-        return isActive;
-    }
-
-    public String getFirstName(){ return firstName; }
-    public String getLastName(){ return lastName; }
     public String getFullName() {
-        if (firstName == null && lastName == null) {
-            return username;
-        }
-        if (firstName != null && lastName != null) {
-            return firstName + " " + lastName;
-        }
+        if (firstName == null && lastName == null) return username;
+        if (firstName != null && lastName != null) return firstName + " " + lastName;
         return firstName != null ? firstName : lastName;
     }
 
-    String getPassword() {
-        return password;
-    }
+    // getPassword() from UserDetails
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
 
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
-    }
-
-    // === EQUALS & HASHCODE ===
+    public void setFirstName(String firstName) { this.firstName = firstName; }
+    public void setLastName(String lastName) { this.lastName = lastName; }
 
     @Override
     public boolean equals(Object o) {
@@ -197,13 +275,9 @@ public class User {
         return Objects.hash(id);
     }
 
-    // === TO STRING ===
-
     @Override
     public String toString() {
         return String.format("User{id=%s, username='%s', email='%s', role=%s}",
                 id, username, email, role);
     }
-
-
 }

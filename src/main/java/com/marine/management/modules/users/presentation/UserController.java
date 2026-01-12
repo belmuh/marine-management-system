@@ -3,7 +3,7 @@ package com.marine.management.modules.users.presentation;
 import com.marine.management.modules.auth.presentation.UserResponse;
 import com.marine.management.modules.users.application.UserService;
 import com.marine.management.modules.users.domain.User;
-import com.marine.management.shared.kernel.security.Role;
+import com.marine.management.shared.security.Role;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -12,6 +12,7 @@ import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -46,12 +47,17 @@ public class UserController {
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<UserResponse> createUser(@Valid @RequestBody CreateUserRequest request) {
+    public ResponseEntity<UserResponse> createUser(
+            @Valid @RequestBody CreateUserRequest request,
+            @AuthenticationPrincipal User currentUser  // ← Mevcut user'dan organization al
+    ) {
+        // Admin, kendi organization'ına user ekler
         User user = userService.registerUserWithRole(
                 request.username(),
                 request.email(),
                 request.password(),
-                request.role()
+                request.role(),
+                currentUser.getOrganization()  // ← Organization ekle
         );
 
         return ResponseEntity.status(HttpStatus.CREATED).body(UserResponse.from(user));
