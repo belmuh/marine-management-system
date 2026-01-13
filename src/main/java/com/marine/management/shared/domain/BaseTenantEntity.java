@@ -1,35 +1,28 @@
 package com.marine.management.shared.domain;
 
-import com.marine.management.shared.domain.TenantEntityListener;
+import com.marine.management.modules.users.domain.User;
+import com.marine.management.shared.multitenant.TenantContext;
 import jakarta.persistence.*;
+import org.hibernate.annotations.Filter;
 
 /**
- * Base class for all tenant-isolated entities.
- *
- * DESIGN:
- * - Provides tenantId field with automatic population
- * - Abstract getId() allows flexible ID types (UUID, Long, etc.)
- * - TenantEntityListener auto-sets tenantId on persist
- * - @Filter applied in child entities for query filtering
+ * Base for tenant-isolated entities.
+ * Extends BaseAuditedEntity and adds tenant isolation.
  */
 @MappedSuperclass
 @EntityListeners(TenantEntityListener.class)
-public abstract class BaseTenantEntity {
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
+public abstract class BaseTenantEntity extends BaseAuditedEntity {
 
     @Column(name = "tenant_id", nullable = false, updatable = false)
     private Long tenantId;
 
     protected BaseTenantEntity() {}
 
-    /**
-     * Returns entity ID. Implementation depends on child class.
-     * Used by TenantEntityListener for logging.
-     */
-    public abstract Object getId();
-
-    // === TENANT MANAGEMENT ===
-
     void setTenantId(Long tenantId) {
+        if (this.tenantId != null) {
+            throw new IllegalStateException("Tenant ID cannot be changed");
+        }
         this.tenantId = tenantId;
     }
 
@@ -39,8 +32,28 @@ public abstract class BaseTenantEntity {
 
     public boolean belongsToTenant(Long tenantId) {
         if (this.tenantId == null) {
-            throw new IllegalStateException("Entity not yet assigned to a tenant");
+            throw new IllegalStateException("Entity not assigned to tenant");
         }
         return this.tenantId.equals(tenantId);
+    }
+
+    private void validateTenantContext() {
+        Long currentTenantId = TenantContext.getCurrentTenantId();
+        if (currentTenantId == null) {
+            throw new IllegalStateException("No tenant context");
+        }
+        if (!belongsToTenant(currentTenantId)) {
+            throw new IllegalStateException("Tenant mismatch");
+        }
+    }
+
+    public void softDelete(User deletedBy) {
+        validateTenantContext();
+        super.softDelete(deletedBy.getId());
+    }
+
+    public void restore(User restoredBy) {
+        validateTenantContext();
+        super.restore(restoredBy.getId());
     }
 }

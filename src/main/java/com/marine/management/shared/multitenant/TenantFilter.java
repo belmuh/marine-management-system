@@ -1,5 +1,6 @@
 package com.marine.management.shared.multitenant;
 
+import com.marine.management.modules.auth.infrastructure.JwtUtil;
 import com.marine.management.modules.users.domain.User;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.servlet.FilterChain;
@@ -53,13 +54,16 @@ public class TenantFilter extends OncePerRequestFilter {
 
     private final SessionFactory sessionFactory;
     private final TenantFilterMetrics metrics;
+    private final JwtUtil jwtUtil;
 
     public TenantFilter(
             EntityManagerFactory entityManagerFactory,
-            TenantFilterMetrics metrics
+            TenantFilterMetrics metrics,
+            JwtUtil jwtUtil
     ) {
         this.sessionFactory = entityManagerFactory.unwrap(SessionFactory.class);
         this.metrics = metrics;
+        this.jwtUtil = jwtUtil;
     }
 
     @Override
@@ -73,15 +77,31 @@ public class TenantFilter extends OncePerRequestFilter {
             boolean tenantEstablished = establishTenantContext();
 
             if (tenantEstablished) {
-                // Best-effort filter enable (session may not be available yet)
-                // TenantEntityListener provides additional safety on PrePersist/PreUpdate
+                // ✅ DEBUG LOG EKLE
+                log.debug("🔵 Tenant BEFORE chain: tenantId={}, path={}",
+                        TenantContext.getCurrentTenantId(), request.getRequestURI());
+
                 enableHibernateTenantFilter();
             }
 
             filterChain.doFilter(request, response);
 
+            // ✅ DEBUG LOG EKLE
+            if (tenantEstablished) {
+                log.debug("🟢 Tenant AFTER chain (before clear): tenantId={}",
+                        TenantContext.getCurrentTenantId());
+            }
+
         } finally {
+            // ✅ DEBUG LOG EKLE
+            Long tenantBeforeClear = TenantContext.getCurrentTenantId();
+            if (tenantBeforeClear != null) {
+                log.debug("🔴 Tenant CLEARING: was={}", tenantBeforeClear);
+            }
+
             clearTenantContext();
+
+            log.trace("Tenant context cleared after request completion");
         }
     }
 
@@ -243,5 +263,22 @@ public class TenantFilter extends OncePerRequestFilter {
         }
 
         return shouldSkip;
+    }
+
+    private Long extractTenantIdFromJwt(HttpServletRequest request) {
+        String authHeader = request.getHeader("Authorization");
+
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return null;
+        }
+
+        String token = authHeader.substring(7);
+
+        try {
+            return jwtUtil.extractTenantId(token);  // ✅ Method renamed
+        } catch (Exception e) {
+            log.warn("Failed to extract tenantId from JWT: {}", e.getMessage());
+            return null;
+        }
     }
 }

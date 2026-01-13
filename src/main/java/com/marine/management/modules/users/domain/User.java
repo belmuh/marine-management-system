@@ -2,6 +2,7 @@ package com.marine.management.modules.users.domain;
 
 import com.marine.management.modules.organization.domain.Organization;
 import com.marine.management.shared.security.Role;
+import com.marine.management.shared.security.TenantAwareUserDetails;
 import jakarta.persistence.*;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -36,7 +37,7 @@ import java.util.UUID;
                 @Index(name = "idx_users_organization", columnList = "organization_id")
         }
 )
-public class User implements UserDetails {
+public class User implements UserDetails, TenantAwareUserDetails {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -243,9 +244,21 @@ public class User implements UserDetails {
 
     public UUID getId() { return id; }
     public Organization getOrganization() { return organization; }
+    public Long getOrganizationId() {
+        return organization != null ? organization.getId() : null;
+    }
     // getUsername() from UserDetails
     public String getEmail() { return email; }
-    public Role getRole() { return role; }
+    @Override
+    public Long getTenantId() {
+        return getOrganizationId();
+    }
+
+    @Override
+    public String getRole() {
+        return role.name();
+    }
+
     // isActive() as isEnabled() from UserDetails
     public String getFirstName() { return firstName; }
     public String getLastName() { return lastName; }

@@ -19,7 +19,7 @@ public record UserResponse(
                 user.getEmail(),
                 user.getFirstName(),
                 user.getLastName(),
-                user.getRole().name(),
+                user.getRole(),
                 user.getOrganization().getYachtName(),
                 user.getOrganization().getId()
         );
