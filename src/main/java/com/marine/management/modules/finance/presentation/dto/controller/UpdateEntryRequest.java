@@ -18,8 +18,8 @@ public record UpdateEntryRequest(
         String description,
 
         // Context fields (nullable)
-        Long whoId,
-        Long mainCategoryId,
+        UUID whoId,
+        UUID mainCategoryId,
         String recipient,
         String country,
         String city,

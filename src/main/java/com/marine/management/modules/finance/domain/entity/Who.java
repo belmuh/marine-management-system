@@ -29,7 +29,10 @@ public class Who {
     private String nameEn;
 
     @Column(name = "is_technical", nullable = false)
-    private Boolean technical = true;
+    private boolean technical = true;  // ✅ Field name without 'is' prefix
+
+    @Column(name = "display_order")
+    private Integer displayOrder;
 
     @Column(name = "suggested_main_category_id")
     private Long suggestedMainCategoryId;
@@ -39,28 +42,21 @@ public class Who {
 
     protected Who() {}
 
-    /**
-     * Creates a new WHO entry.
-     *
-     * @param code unique WHO code (e.g., "CAPTAIN", "MAIN_ENGINE")
-     * @param nameTr Turkish name
-     * @param nameEn English name
-     * @param isTechnical technical equipment flag
-     * @param suggestedMainCategoryId suggested main category (nullable)
-     * @return new Who instance
-     */
+
     public static Who create(
             String code,
             String nameTr,
             String nameEn,
-            boolean isTechnical,
+            boolean technical,
+            Integer displayOrder,
             Long suggestedMainCategoryId
     ) {
         Who who = new Who();
         who.code = Objects.requireNonNull(code, "Code cannot be null").toUpperCase();
         who.nameTr = Objects.requireNonNull(nameTr, "Turkish name cannot be null");
         who.nameEn = Objects.requireNonNull(nameEn, "English name cannot be null");
-        who.technical = isTechnical;
+        who.technical = technical;  // ✅ Consistent field name
+        who.displayOrder = displayOrder;
         who.suggestedMainCategoryId = suggestedMainCategoryId;
 
         who.validate();
@@ -89,10 +85,10 @@ public class Who {
 
     // === BUSINESS METHODS ===
 
-    public void updateDetails(String nameTr, String nameEn, Boolean isTechnical) {
+    public void updateDetails(String nameTr, String nameEn, boolean technical) {
         this.nameTr = Objects.requireNonNull(nameTr, "Turkish name cannot be null");
         this.nameEn = Objects.requireNonNull(nameEn, "English name cannot be null");
-        this.technical = Objects.requireNonNull(isTechnical, "Technical flag cannot be null");
+        this.technical = technical;  // ✅ Consistent field name
         validate();
     }
 
@@ -102,20 +98,61 @@ public class Who {
 
     // === GETTERS & SETTERS ===
 
-    public Long getId() { return id; }
-    public String getCode() { return code; }
-    public void setCode(String code) { this.code = code; }
-    public String getNameTr() { return nameTr; }
-    public void setNameTr(String nameTr) { this.nameTr = nameTr; }
-    public String getNameEn() { return nameEn; }
-    public void setNameEn(String nameEn) { this.nameEn = nameEn; }
-    public Boolean getTechnical() { return technical; }
-    public void setTechnical(Boolean technical) { this.technical = technical; }
-    public Long getSuggestedMainCategoryId() { return suggestedMainCategoryId; }
+    public Long getId() {
+        return id;
+    }
+
+    public String getCode() {
+        return code;
+    }
+
+    public void setCode(String code) {
+        this.code = code;
+    }
+
+    public String getNameTr() {
+        return nameTr;
+    }
+
+    public void setNameTr(String nameTr) {
+        this.nameTr = nameTr;
+    }
+
+    public String getNameEn() {
+        return nameEn;
+    }
+
+    public void setNameEn(String nameEn) {
+        this.nameEn = nameEn;
+    }
+
+    public boolean isTechnical() {  // ✅ Getter with 'is' prefix
+        return technical;
+    }
+
+    public void setTechnical(boolean technical) {  // ✅ Setter without 'is' prefix
+        this.technical = technical;
+    }
+
+    public Integer getDisplayOrder() {
+        return displayOrder;
+    }
+
+    public void setDisplayOrder(Integer displayOrder) {
+        this.displayOrder = displayOrder;
+    }
+
+    public Long getSuggestedMainCategoryId() {
+        return suggestedMainCategoryId;
+    }
+
     public void setSuggestedMainCategoryId(Long suggestedMainCategoryId) {
         this.suggestedMainCategoryId = suggestedMainCategoryId;
     }
-    public LocalDateTime getCreatedAt() { return createdAt; }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
 
     @Override
     public boolean equals(Object o) {

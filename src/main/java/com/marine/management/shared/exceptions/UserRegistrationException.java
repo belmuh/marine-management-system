@@ -10,6 +10,8 @@ public class UserRegistrationException extends RuntimeException{
         super(message, cause);
     }
 
+
+
     // Factory methods for common cases
     public static UserRegistrationException usernameAlreadyExists(String username) {
         return new UserRegistrationException("Username already exists: " + username);
@@ -17,5 +19,9 @@ public class UserRegistrationException extends RuntimeException{
 
     public static UserRegistrationException emailAlreadyExists(String email) {
         return new UserRegistrationException("Email already exists: " + email);
+    }
+
+    public static UserRegistrationException organizationNameAlreadyExists(String name) {
+        return new UserRegistrationException("Organization name already exists: " + name);
     }
 }

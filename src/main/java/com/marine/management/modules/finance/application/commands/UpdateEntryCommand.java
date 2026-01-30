@@ -1,12 +1,10 @@
 package com.marine.management.modules.finance.application.commands;
 
-import com.marine.management.modules.finance.domain.entity.FinancialEntryAttachment;
 import com.marine.management.modules.finance.domain.enums.PaymentMethod;
 import com.marine.management.modules.finance.domain.enums.RecordType;
 import com.marine.management.modules.finance.domain.vo.Money;
 import com.marine.management.modules.users.domain.User;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -19,8 +17,8 @@ public record UpdateEntryCommand(
         PaymentMethod paymentMethod,
         String description,
         User updater,
-        Long whoId,
-        Long mainCategoryId,
+        UUID whoId,
+        UUID mainCategoryId,
         String recipient,
         String country,
         String city,

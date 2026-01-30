@@ -1,4 +1,4 @@
-package com.marine.management.modules.auth.domain;
+package com.marine.management.modules.auth.domain.commands;
 
 import com.marine.management.modules.users.domain.User;
 

@@ -11,7 +11,7 @@ public record TreeNodeDTO(
         String nameEn,
         BigDecimal amount,
         BigDecimal percentage,
-        Boolean isTechnical,
+        Boolean technical,
         Integer childCount,
         List<TreeNodeDTO> children
 ) { }

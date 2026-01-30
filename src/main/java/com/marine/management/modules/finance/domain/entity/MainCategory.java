@@ -45,23 +45,11 @@ public class MainCategory {
 
     protected MainCategory() {}
 
-    /**
-     * Creates a new main category.
-     *
-     * @param code unique category code (e.g., "CREW_EXPENSES")
-     * @param nameTr Turkish name
-     * @param nameEn English name
-     * @param isTechnical technical expense flag
-     * @param displayOrder UI sort order
-     * @param budgetMin budget guideline minimum
-     * @param budgetMax budget guideline maximum
-     * @return new MainCategory instance
-     */
     public static MainCategory create(
             String code,
             String nameTr,
             String nameEn,
-            boolean isTechnical,
+            boolean technical,
             int displayOrder,
             String budgetMin,
             String budgetMax
@@ -70,7 +58,7 @@ public class MainCategory {
         category.code = Objects.requireNonNull(code, "Code cannot be null").toUpperCase();
         category.nameTr = Objects.requireNonNull(nameTr, "Turkish name cannot be null");
         category.nameEn = Objects.requireNonNull(nameEn, "English name cannot be null");
-        category.technical = isTechnical;
+        category.technical = technical;
         category.displayOrder = displayOrder;
         category.budgetGuidelineMin = budgetMin;
         category.budgetGuidelineMax = budgetMax;
@@ -122,8 +110,8 @@ public class MainCategory {
     public void setNameTr(String nameTr) { this.nameTr = nameTr; }
     public String getNameEn() { return nameEn; }
     public void setNameEn(String nameEn) { this.nameEn = nameEn; }
-    public Boolean getTechnical() { return technical; }
-    public void setTechnical(Boolean technical) { this.technical = technical; }
+    public Boolean isTechnical() { return technical; }
+    public void setTechnical(Boolean isTechnical) { this.technical = isTechnical; }
     public Integer getDisplayOrder() { return displayOrder; }
     public void setDisplayOrder(Integer displayOrder) { this.displayOrder = displayOrder; }
     public String getBudgetGuidelineMin() { return budgetGuidelineMin; }

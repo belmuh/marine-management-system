@@ -21,7 +21,7 @@ public record UserResponse(
                 user.getLastName(),
                 user.getRole(),
                 user.getOrganization().getYachtName(),
-                user.getOrganization().getId()
+                user.getOrganization().getOrganizationId()
         );
     }
 }

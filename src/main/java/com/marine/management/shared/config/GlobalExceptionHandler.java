@@ -21,9 +21,12 @@ public class GlobalExceptionHandler {
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidationErrors(MethodArgumentNotValidException ex, HttpServletRequest request){
+    public ResponseEntity<ErrorResponse> handleValidationErrors(
+            MethodArgumentNotValidException ex,
+            HttpServletRequest request) {
         String errorId = UUID.randomUUID().toString();
         logger.warn("Validation [ID: {}] failed at {}: {}", errorId, request.getRequestURI(), ex.getMessage());
+
         String errorMessage = ex.getBindingResult().getFieldErrors()
                 .stream()
                 .map(FieldError::getDefaultMessage)
@@ -31,96 +34,132 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.badRequest()
                 .body(new ErrorResponse(
-                        "Validation failed",
-                        errorMessage,
-                        "VALIDATION_ERROR",
-                        errorId));
+                        "Validation failed",  // error
+                        errorMessage,         // message
+                        "VALIDATION_ERROR",   // code
+                        errorId               // errorId
+                ));
     }
 
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ErrorResponse> handleIllegalState(
             IllegalStateException ex,
-            HttpServletRequest request
-    ) {
+            HttpServletRequest request) {
         String errorId = UUID.randomUUID().toString();
-        logger.warn("Validation error [ID: {}] at {}: {}",
-                errorId, request.getRequestURI(), ex.getMessage());
+        logger.warn("Validation error [ID: {}] at {}: {}", errorId, request.getRequestURI(), ex.getMessage());
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ErrorResponse(
-                        ex.getMessage(),  // ← "Category code cannot be empty"
-                        "VALIDATION_ERROR",
-                        errorId
+                        "Validation Error",    // error
+                        ex.getMessage(),       // message
+                        "VALIDATION_ERROR",    // code
+                        errorId                // errorId
                 ));
     }
 
     @ExceptionHandler(AuthenticationFailedException.class)
-    public ResponseEntity<ErrorResponse> handleAuthenticationFailed(AuthenticationFailedException ex, HttpServletRequest request){
+    public ResponseEntity<ErrorResponse> handleAuthenticationFailed(
+            AuthenticationFailedException ex,
+            HttpServletRequest request) {
         String errorId = UUID.randomUUID().toString();
         logger.warn("Authentication failed [ID: {}] at {}: {}", errorId, request.getRequestURI(), ex.getMessage());
+
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new ErrorResponse(
-                        ex.getMessage(),
-                        "AUTHENTICATION_FAILED",
-                        errorId));
+                        "Authentication Failed",    // error
+                        ex.getMessage(),            // message
+                        "AUTHENTICATION_FAILED",    // code
+                        errorId                     // errorId
+                ));
     }
 
     @ExceptionHandler(UnauthorizedAccessException.class)
-    public ResponseEntity<ErrorResponse> handleUnauthorizedAccess(UnauthorizedAccessException ex, HttpServletRequest request){
+    public ResponseEntity<ErrorResponse> handleUnauthorizedAccess(
+            UnauthorizedAccessException ex,
+            HttpServletRequest request) {
         String errorId = UUID.randomUUID().toString();
         logger.warn("Unauthorized Access [ID: {}] at {}: {}", errorId, request.getRequestURI(), ex.getMessage());
+
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ErrorResponse(
-                        ex.getMessage(),
-                        "UNAUTHORIZED_ACCESS",
-                        errorId));
+                        "Unauthorized Access",      // error
+                        ex.getMessage(),            // message
+                        "UNAUTHORIZED_ACCESS",      // code
+                        errorId                     // errorId
+                ));
     }
 
     @ExceptionHandler(UserNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleUserNotFound(UserNotFoundException ex, HttpServletRequest request){
+    public ResponseEntity<ErrorResponse> handleUserNotFound(
+            UserNotFoundException ex,
+            HttpServletRequest request) {
         String errorId = UUID.randomUUID().toString();
         logger.info("User not found [ID: {}] at {}: {}", errorId, request.getRequestURI(), ex.getMessage());
+
         if (request.getRequestURI().contains("/auth/")) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new ErrorResponse(
-                            "Invalid credentials",
-                            "AUTHENTICATION_FAILED",
-                            errorId));
+                            "Authentication Failed",     // error
+                            "Invalid credentials",       // message
+                            "AUTHENTICATION_FAILED",     // code
+                            errorId                      // errorId
+                    ));
         }
 
-        // Admin panel'de user arama gibi durumlarda 404 dönebilir
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(new ErrorResponse(
-                        "User not found",  // Genel mesaj
-                        "USER_NOT_FOUND",
-                        errorId));
+                        "Not Found",          // error
+                        "User not found",     // message
+                        "USER_NOT_FOUND",     // code
+                        errorId               // errorId
+                ));
     }
 
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGenericException(Exception ex, HttpServletRequest request){
-        String errorId = UUID.randomUUID().toString();
-        logger.error("Unexpected error [ID: {}] at {}: {}", errorId, request.getRequestURI(), ex.getMessage(), ex);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ErrorResponse(
-                        "An unexpected error occurred",
-                        "INTERNAL_ERROR",
-                        errorId ));
-    }
-
-    // İleride ekleyebilirsin:
     @ExceptionHandler(UserRegistrationException.class)
-    public ResponseEntity<ErrorResponse> handleUserRegistration(UserRegistrationException ex, HttpServletRequest request) {
+    public ResponseEntity<ErrorResponse> handleUserRegistration(
+            UserRegistrationException ex,
+            HttpServletRequest request) {
         String errorId = UUID.randomUUID().toString();
         logger.warn("User registration failed [ID: {}] at {}: {}", errorId, request.getRequestURI(), ex.getMessage());
+
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(new ErrorResponse(ex.getMessage(), "USER_REGISTRATION_ERROR", errorId));
+                .body(new ErrorResponse(
+                        "Registration Failed",          // error
+                        ex.getMessage(),                // message
+                        "USER_REGISTRATION_ERROR",      // code
+                        errorId                         // errorId
+                ));
     }
 
     @ExceptionHandler(UserUpdateException.class)
-    public ResponseEntity<ErrorResponse> handleUserUpdate(UserUpdateException ex, HttpServletRequest request) {
+    public ResponseEntity<ErrorResponse> handleUserUpdate(
+            UserUpdateException ex,
+            HttpServletRequest request) {
         String errorId = UUID.randomUUID().toString();
         logger.warn("User update failed [ID: {}] at {}: {}", errorId, request.getRequestURI(), ex.getMessage());
+
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(new ErrorResponse(ex.getMessage(), "USER_UPDATE_ERROR", errorId));
+                .body(new ErrorResponse(
+                        "Update Failed",           // error
+                        ex.getMessage(),           // message
+                        "USER_UPDATE_ERROR",       // code
+                        errorId                    // errorId
+                ));
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponse> handleGenericException(
+            Exception ex,
+            HttpServletRequest request) {
+        String errorId = UUID.randomUUID().toString();
+        logger.error("Unexpected error [ID: {}] at {}: {}", errorId, request.getRequestURI(), ex.getMessage(), ex);
+
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ErrorResponse(
+                        "Internal Server Error",            // error
+                        "An unexpected error occurred",     // message
+                        "INTERNAL_ERROR",                   // code
+                        errorId                             // errorId
+                ));
     }
 }

@@ -1,14 +1,10 @@
+// modules/users/presentation/UserController.java
 package com.marine.management.modules.users.presentation;
 
-import com.marine.management.modules.auth.presentation.UserResponse;
 import com.marine.management.modules.users.application.UserService;
 import com.marine.management.modules.users.domain.User;
-import com.marine.management.shared.security.Role;
+import com.marine.management.modules.users.presentation.dto.*;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -18,6 +14,25 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * User management controller.
+ *
+ * All operations are tenant-scoped (users can only manage users within their organization).
+ *
+ * ADMIN operations:
+ * - Create user
+ * - Update user role
+ * - Activate/deactivate user
+ * - Delete user
+ *
+ * ADMIN/MANAGER operations:
+ * - List all users
+ * - Get user by ID
+ *
+ * USER operations:
+ * - Update own profile
+ * - Change own password
+ */
 @RestController
 @RequestMapping("/api/users")
 public class UserController {
@@ -28,140 +43,183 @@ public class UserController {
         this.userService = userService;
     }
 
+    /**
+     * List all users in current organization.
+     *
+     * @return List of users in current tenant
+     */
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
-    public ResponseEntity<List<UserResponse>> getAllUsers(){
+    public ResponseEntity<List<UserDTO>> getAllUsers() {
         List<User> users = userService.getAllUsers();
-        List<UserResponse> response = users.stream()
-                .map(UserResponse::from)
+        List<UserDTO> response = users.stream()
+                .map(UserDTO::from)  // UserDTO instead of UserResponse
                 .toList();
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * Get user by ID within current organization.
+     *
+     * @param userId User UUID
+     * @return User details
+     */
     @GetMapping("/{userId}")
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
-    public ResponseEntity<UserResponse> getUserById(@PathVariable UUID userId) {
+    public ResponseEntity<UserDTO> getUserById(@PathVariable UUID userId) {
         User user = userService.getUserByIdOrThrow(userId);
-        return ResponseEntity.ok(UserResponse.from(user));
+        return ResponseEntity.ok(UserDTO.from(user));
     }
 
+    /**
+     * Create new user in current organization.
+     *
+     * Only ADMIN can create users.
+     * User will be created in the same organization as the current admin.
+     *
+     * @param request User creation request
+     * @param currentUser Current authenticated admin user
+     * @return Created user details
+     */
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<UserResponse> createUser(
+    public ResponseEntity<UserDTO> createUser(
             @Valid @RequestBody CreateUserRequest request,
-            @AuthenticationPrincipal User currentUser  // ← Mevcut user'dan organization al
+            @AuthenticationPrincipal User currentUser
     ) {
-        // Admin, kendi organization'ına user ekler
+        //  Admin creates user in their own organization
         User user = userService.registerUserWithRole(
-                request.username(),
-                request.email(),
-                request.password(),
-                request.role(),
-                currentUser.getOrganization()  // ← Organization ekle
+                request.email(),                    // email
+                request.firstName(),                //  firstName
+                request.lastName(),                 //  lastName
+                request.password(),                 // password
+                request.role(),                     // role
+                currentUser.getOrganization()       // organization
         );
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(UserResponse.from(user));
+        return ResponseEntity.status(HttpStatus.CREATED).body(UserDTO.from(user));
     }
 
+    /**
+     * Update user profile (username, email, firstName, lastName).
+     *
+     * ADMIN/MANAGER can update any user in their organization.
+     * USER can only update their own profile.
+     *
+     * @param userId User UUID
+     * @param request Profile update request
+     * @return Updated user details
+     */
     @PutMapping("/{userId}/profile")
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or #userId == authentication.principal.id")
-    public ResponseEntity<UserResponse> updateUserProfile(@PathVariable UUID userId,
-                                                          @Valid @RequestBody UpdateProfileRequest request) {
-        User user = userService.updateUserProfile(userId, request.username(), request.email());
-        return ResponseEntity.ok(UserResponse.from(user));
+    public ResponseEntity<UserDTO> updateUserProfile(
+            @PathVariable UUID userId,
+            @Valid @RequestBody UpdateUserRequest request
+    ) {
+        User user = userService.updateUserProfile(
+                userId,
+                request.email(),
+                request.firstName(),
+                request.lastName()
+        );
+        return ResponseEntity.ok(UserDTO.from(user));
     }
 
+    /**
+     * Update user role.
+     *
+     * Only ADMIN can change user roles.
+     *
+     * @param userId User UUID
+     * @param request Role update request
+     * @return Updated user details
+     */
     @PutMapping("/{userId}/role")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<UserResponse> updateUserRole(@PathVariable UUID userId,
-                                                       @Valid @RequestBody UpdateRoleRequest request) {
+    public ResponseEntity<UserDTO> updateUserRole(
+            @PathVariable UUID userId,
+            @Valid @RequestBody UpdateUserRoleRequest request
+    ) {
         User user = userService.updateUserRole(userId, request.role());
-        return ResponseEntity.ok(UserResponse.from(user));
+        return ResponseEntity.ok(UserDTO.from(user));
     }
 
+    /**
+     * Change user password.
+     *
+     * ADMIN can change any user's password.
+     * USER can only change their own password.
+     *
+     * @param userId User UUID
+     * @param request Password change request
+     * @return Empty response
+     */
     @PutMapping("/{userId}/password")
-    @PreAuthorize("#userId == authentication.principal.id")
+    @PreAuthorize("hasRole('ADMIN') or #userId == authentication.principal.id")
     public ResponseEntity<Void> changePassword(
             @PathVariable UUID userId,
-            @Valid @RequestBody ChangePasswordRequest request) {
-
+            @Valid @RequestBody ChangePasswordRequest request
+    ) {
         userService.changeUserPassword(userId, request.newPassword());
         return ResponseEntity.ok().build();
     }
 
+    /**
+     * Activate user account.
+     *
+     * Only ADMIN can activate users.
+     *
+     * @param id User UUID
+     * @return Activated user details
+     */
     @PatchMapping("/{id}/activate")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<UserResponse> activate(@PathVariable UUID id) {
+    public ResponseEntity<UserDTO> activate(@PathVariable UUID id) {
         User user = userService.activate(id);
-        return ResponseEntity.ok(UserResponse.from(user));
+        return ResponseEntity.ok(UserDTO.from(user));
     }
 
+    /**
+     * Deactivate user account.
+     *
+     * Only ADMIN can deactivate users.
+     *
+     * @param id User UUID
+     * @return Deactivated user details
+     */
     @PatchMapping("/{id}/deactivate")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<UserResponse> deactivate(@PathVariable UUID id) {
+    public ResponseEntity<UserDTO> deactivate(@PathVariable UUID id) {
         User user = userService.deactivate(id);
-        return ResponseEntity.ok(UserResponse.from(user));
+        return ResponseEntity.ok(UserDTO.from(user));
     }
 
+    /**
+     * Delete user (soft delete via BaseAuditedEntity).
+     *
+     * Only ADMIN can delete users.
+     *
+     * @param userId User UUID
+     * @return Empty response
+     */
     @DeleteMapping("/{userId}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Void> deleteUser(@PathVariable UUID userId){
+    public ResponseEntity<Void> deleteUser(@PathVariable UUID userId) {
         userService.deleteUser(userId);
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/check-username")
-    public ResponseEntity<AvailabilityResponse> checkUsernameAvailability(
-            @RequestParam String username) {
-        boolean available = userService.isUsernameAvailable(username);
-        return ResponseEntity.ok(new AvailabilityResponse(available));
-    }
-
+    /**
+     * Check if email is available for registration.
+     *
+     * @param email Email to check
+     * @return Availability status
+     */
     @GetMapping("/check-email")
     public ResponseEntity<AvailabilityResponse> checkEmailAvailability(@RequestParam String email) {
         boolean available = userService.isEmailAvailable(email);
         return ResponseEntity.ok(new AvailabilityResponse(available));
     }
 
-    // === REQUEST DTOs ===
-    public record CreateUserRequest(
-            @NotBlank(message = "Username cannot be blank")
-            @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
-            @Pattern(regexp = "^[a-zA-Z0-9_]+$", message = "Username can only contain letters, numbers and underscores")
-            String username,
-
-            @NotBlank(message = "Email cannot be blank")
-            @Email(message = "Email should be valid")
-            String email,
-
-            @NotBlank(message = "Password cannot be blank")
-            @Size(min=8, message = "Password must be at least 8 characters")
-            String password,
-
-            Role role
-    ){}
-
-    public record UpdateProfileRequest(
-            @NotBlank(message = "Username cannot be blank")
-            @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
-            @Pattern(regexp = "^[a-zA-Z0-9_]+$", message = "Username can only contain letters, numbers and underscores")
-            String username,
-
-            @NotBlank(message = "Email cannot be blank")
-            @Email(message = "Email should be valid")
-            String email
-    ) {}
-
-    public record UpdateRoleRequest(Role role) {}
-
-    public record ChangePasswordRequest(
-            @NotBlank(message = "New password cannot be blank")
-            @Size(min = 8, message = "New password must be at least 8 characters")
-            String newPassword
-    ) {}
-
     public record AvailabilityResponse(boolean available) {}
-
-
-
 }

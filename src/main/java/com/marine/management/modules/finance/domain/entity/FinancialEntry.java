@@ -10,38 +10,18 @@ import com.marine.management.modules.users.domain.User;
 import com.marine.management.shared.domain.BaseTenantEntity;
 import com.marine.management.shared.exceptions.ExchangeRateCalculationException;
 import jakarta.persistence.*;
-import org.hibernate.annotations.Filter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.*;
 
-/**
- * Financial entry entity with automatic tenant isolation.
- *
- * TENANT ISOLATION:
- * - Extends BaseTenantEntity (automatic tenant_id injection)
- * - @Filter applies WHERE tenant_id = ? to all queries
- * - Domain-level tenant consistency validation
- * - JPA lifecycle hooks ensure validation always runs
- *
- * DOMAIN GUARDS:
- * - Validates tenant consistency for all references
- * - Prevents cross-tenant entity references
- * - Enforces category mapping rules
- * - Lifecycle validation via @PrePersist and @PreUpdate
- */
 @Entity
 @Table(
         name = "financial_entries",
         uniqueConstraints = {
-                @UniqueConstraint(
-                        name = "uq_financial_entries_entry_number",
-                        columnNames = "entry_number"
-                )
+                @UniqueConstraint(name = "uq_financial_entries_entry_number", columnNames = "entry_number")
         },
         indexes = {
                 @Index(name = "idx_financial_entries_tenant_id", columnList = "tenant_id"),
@@ -53,33 +33,25 @@ import java.util.*;
                 @Index(name = "idx_financial_entries_tenant_main_cat", columnList = "tenant_main_category_id")
         }
 )
-
-@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class FinancialEntry extends BaseTenantEntity {
 
     private static final Logger logger = LoggerFactory.getLogger(FinancialEntry.class);
 
     public static final String BASE_CURRENCY = "EUR";
 
-    // === IDENTITY ===
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(columnDefinition = "UUID", updatable = false, nullable = false)
     private UUID id;
 
     @Embedded
-    @AttributeOverride(
-            name = "value",
-            column = @Column(name = "entry_number", unique = true, nullable = false, length = 50)
-    )
+    @AttributeOverride(name = "value", column = @Column(name = "entry_number", unique = true, nullable = false, length = 50))
     private EntryNumber entryNumber;
 
-    // === STATUS ===
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private EntryStatus status = EntryStatus.DRAFT;
 
-    // === CORE ATTRIBUTES ===
     @Enumerated(EnumType.STRING)
     @Column(name = "entry_type", nullable = false, length = 20)
     private RecordType entryType;
@@ -112,8 +84,6 @@ public class FinancialEntry extends BaseTenantEntity {
     @Column(length = 1000)
     private String description;
 
-    // === CONTEXTUAL DATA ===
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tenant_who_id")
     private TenantWhoSelection tenantWho;
@@ -137,7 +107,6 @@ public class FinancialEntry extends BaseTenantEntity {
     @Column(name = "vendor", length = 100)
     private String vendor;
 
-    // === METADATA ===
     @Column(name = "frequency", length = 20)
     private String frequency;
 
@@ -147,7 +116,6 @@ public class FinancialEntry extends BaseTenantEntity {
     @Column(name = "tags", length = 500)
     private String tags;
 
-    // === FINANCIAL DETAILS ===
     @Column(name = "receipt_number", length = 100)
     private String receiptNumber;
 
@@ -157,60 +125,33 @@ public class FinancialEntry extends BaseTenantEntity {
     @Column(name = "exchange_rate_date")
     private LocalDate exchangeRateDate;
 
-    // === AGGREGATE RELATIONS ===
     @OneToMany(mappedBy = "entry", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<FinancialEntryAttachment> attachments = new ArrayList<>();
 
-    // === AUDIT ===
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "created_by", nullable = false, updatable = false)
-    private User createdBy;
+    // Removed: createdBy, createdAt, updatedBy, updatedAt, version (from BaseAuditedEntity)
 
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "updated_by")
-    private User updatedBy;
-
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
-
-    @Version
-    private Long version;
-
-    // === CONSTRUCTORS ===
     protected FinancialEntry() {}
 
-    // === JPA LIFECYCLE HOOKS ===
+    @Override
+    public Object getId() {
+        return id;
+    }
 
-    /**
-     * JPA lifecycle hook - validates entity before persist.
-     *
-     * CRITICAL: Ensures validation runs even if service layer forgets.
-     * Safety net for:
-     * - Direct JPA usage
-     * - Cascade operations
-     * - Future refactoring
-     */
+    public UUID getEntryId() {
+        return id;
+    }
+
     @PrePersist
     protected void onPrePersist() {
         validate();
         logger.debug("Pre-persist validation passed for entry: {}", entryNumber);
     }
 
-    /**
-     * JPA lifecycle hook - validates entity before update.
-     *
-     * CRITICAL: Catches validation errors during Hibernate dirty checking.
-     */
     @PreUpdate
     protected void onPreUpdate() {
         validate();
         logger.trace("Pre-update validation passed for entry: {}", entryNumber);
     }
-
-    // === FACTORY METHOD ===
 
     public static FinancialEntry create(
             EntryNumber entryNumber,
@@ -247,9 +188,6 @@ public class FinancialEntry extends BaseTenantEntity {
         entry.entryDate = entryDate;
         entry.paymentMethod = paymentMethod;
         entry.description = description;
-        entry.createdBy = creator;
-        entry.createdAt = LocalDateTime.now();
-        entry.updatedAt = LocalDateTime.now();
 
         entry.tenantWho = tenantWho;
         entry.tenantMainCategory = tenantMainCategory;
@@ -263,8 +201,6 @@ public class FinancialEntry extends BaseTenantEntity {
 
         return entry;
     }
-
-    // === DOMAIN METHODS ===
 
     public void calculateBaseAmount(ExchangeRateService exchangeRateService) {
         Objects.requireNonNull(exchangeRateService, "Exchange rate service cannot be null");
@@ -300,7 +236,6 @@ public class FinancialEntry extends BaseTenantEntity {
     public void recalculateBaseAmount(ExchangeRateService exchangeRateService, User updater) {
         requireEditPermission(updater);
         calculateBaseAmount(exchangeRateService);
-        updateAudit(updater);
     }
 
     public void updateDetails(
@@ -321,7 +256,6 @@ public class FinancialEntry extends BaseTenantEntity {
         this.paymentMethod = Objects.requireNonNull(paymentMethod, "Payment method cannot be null");
         this.description = description;
 
-        updateAudit(updater);
         validate();
     }
 
@@ -345,7 +279,6 @@ public class FinancialEntry extends BaseTenantEntity {
         this.specificLocation = specificLocation;
         this.vendor = vendor;
 
-        updateAudit(updater);
         validate();
     }
 
@@ -354,13 +287,11 @@ public class FinancialEntry extends BaseTenantEntity {
         this.frequency = frequency;
         this.priority = priority;
         this.tags = tags;
-        updateAudit(updater);
     }
 
     public void updateReceiptNumber(String receiptNumber, User updater) {
         requireEditPermission(updater);
         this.receiptNumber = receiptNumber;
-        updateAudit(updater);
     }
 
     public void updateExchangeRate(BigDecimal rate, LocalDate rateDate, User updater) {
@@ -376,17 +307,8 @@ public class FinancialEntry extends BaseTenantEntity {
         if (originalAmount != null && !originalAmount.isEuro()) {
             this.baseAmount = this.originalAmount.convertUsing(rate, BASE_CURRENCY);
         }
-
-        updateAudit(updater);
     }
 
-    // === STATUS MANAGEMENT ===
-
-    /**
-     * Changes entry status with state machine validation.
-     *
-     * IMPROVED: Type-safe with EntryStatus enum.
-     */
     public void changeStatus(EntryStatus newStatus, User updater) {
         requireEditPermission(updater);
 
@@ -398,20 +320,12 @@ public class FinancialEntry extends BaseTenantEntity {
 
         EntryStatus oldStatus = this.status;
         this.status = newStatus;
-        updateAudit(updater);
 
         logger.info(
                 "Entry status changed: id={}, from={}, to={}, by={}",
                 id, oldStatus, newStatus, updater.getUsername()
         );
     }
-
-    private boolean isValidTransition(EntryStatus from, EntryStatus to) {
-        // TODO: Implement proper state machine
-        return true;
-    }
-
-    // === ATTACHMENT MANAGEMENT ===
 
     public void addAttachment(FinancialEntryAttachment attachment, User updater) {
         requireEditPermission(updater);
@@ -422,8 +336,6 @@ public class FinancialEntry extends BaseTenantEntity {
         }
         attachments.add(attachment);
         attachment.associateWithEntry(this);
-
-        updateAudit(updater);
     }
 
     public void removeAttachment(FinancialEntryAttachment attachment, User updater) {
@@ -431,11 +343,8 @@ public class FinancialEntry extends BaseTenantEntity {
 
         if (attachments != null && attachments.remove(attachment)) {
             attachment.dissociateFromEntry();
-            updateAudit(updater);
         }
     }
-
-    // === DOMAIN CHECKS ===
 
     public boolean isIncome() {
         return this.entryType == RecordType.INCOME;
@@ -473,8 +382,6 @@ public class FinancialEntry extends BaseTenantEntity {
         requireEditPermission(user);
     }
 
-    // === BACKWARD COMPATIBILITY ===
-
     public Long getWhoId() {
         return tenantWho != null && tenantWho.getWho() != null
                 ? tenantWho.getWho().getId()
@@ -487,8 +394,6 @@ public class FinancialEntry extends BaseTenantEntity {
                 : null;
     }
 
-    // === VALIDATION ===
-
     public void validate() {
         List<String> errors = new ArrayList<>();
 
@@ -500,7 +405,6 @@ public class FinancialEntry extends BaseTenantEntity {
         }
         if (category == null) errors.add("Category is required");
         if (category != null && !category.isActive()) errors.add("Category must be active");
-        if (createdBy == null) errors.add("Creator is required");
         if (entryDate == null) errors.add("Entry date is required");
         if (entryDate != null && entryDate.isAfter(LocalDate.now())) {
             errors.add("Entry date cannot be in the future");
@@ -514,64 +418,44 @@ public class FinancialEntry extends BaseTenantEntity {
         validateCategoryMapping();
     }
 
-    /**
-     * Validates that all tenant-specific references belong to the same tenant.
-     *
-     * CRITICAL SECURITY: Prevents cross-tenant entity references.
-     *
-     * NOTE: This check is null-safe for @PrePersist scenario where
-     * tenant_id might not be set yet (TenantEntityListener runs after).
-     */
     private void validateTenantConsistency() {
         Long entryTenantId = getTenantId();
 
-        // ✅ FIXED: Allow null tenant_id during @PrePersist
-        // TenantEntityListener will inject it before actual persist
         if (entryTenantId == null) {
             logger.trace("Tenant ID not yet set (expected during entity creation)");
-            return;  // Skip validation - will run again in @PreUpdate
+            return;
         }
 
-        // Validate tenantWho belongs to same tenant
         if (tenantWho != null) {
-            if (!tenantWho.belongsToTenant(entryTenantId)) {
+            if (tenantWho.doesNotBelongToTenant(entryTenantId)) {
                 logger.error("SECURITY VIOLATION: Cross-tenant TenantWhoSelection! " +
                                 "Entry tenant: {}, WHO tenant: {}",
                         entryTenantId, tenantWho.getTenantId());
-                throw new SecurityException(
-                        "TenantWhoSelection belongs to different tenant."
-                );
+                throw new SecurityException("TenantWhoSelection belongs to different tenant.");
             }
         }
 
-        // Validate tenantMainCategory belongs to same tenant
         if (tenantMainCategory != null) {
-            if (!tenantMainCategory.belongsToTenant(entryTenantId)) {
+            if (tenantMainCategory.doesNotBelongToTenant(entryTenantId)) {
                 logger.error("SECURITY VIOLATION: Cross-tenant TenantMainCategory! " +
                                 "Entry tenant: {}, MainCategory tenant: {}",
                         entryTenantId, tenantMainCategory.getTenantId());
-                throw new SecurityException(
-                        "TenantMainCategory belongs to different tenant."
-                );
+                throw new SecurityException("TenantMainCategory belongs to different tenant.");
             }
         }
 
-        // Validate category belongs to same tenant
         if (category != null) {
-            if (!category.belongsToTenant(entryTenantId)) {
+            if (category.doesNotBelongToTenant(entryTenantId)) {
                 logger.error("SECURITY VIOLATION: Cross-tenant FinancialCategory! " +
                                 "Entry tenant: {}, Category tenant: {}",
                         entryTenantId, category.getTenantId());
-                throw new SecurityException(
-                        "FinancialCategory belongs to different tenant."
-                );
+                throw new SecurityException("FinancialCategory belongs to different tenant.");
             }
         }
     }
 
     private void validateCategoryMapping() {
         if (tenantMainCategory != null && category != null) {
-            // ✅ FIXED: TRACE level for development debugging only
             if (logger.isTraceEnabled()) {
                 logger.trace("Category mapping: MainCategory={}, FinancialCategory={}",
                         tenantMainCategory.getMainCategory().getCode(),
@@ -579,8 +463,6 @@ public class FinancialEntry extends BaseTenantEntity {
             }
         }
     }
-
-    // === HELPER METHODS ===
 
     public String getFullLocation() {
         if (country == null && city == null && specificLocation == null) {
@@ -601,21 +483,18 @@ public class FinancialEntry extends BaseTenantEntity {
         return location.isEmpty() ? null : location;
     }
 
-    // === PRIVATE METHODS ===
-
     private void requireEditPermission(User user) {
-        if (!belongsToTenant(user.getOrganization().getId())) {
+        if (doesNotBelongToTenant(user.getOrganizationId())) {
             logger.error("SECURITY VIOLATION: Cross-tenant access for FinancialEntry! " +
                             "Entry tenant: {}, User tenant: {}, User: {}",
                     getTenantId(),
-                    user.getOrganization().getId(),
+                    user.getOrganizationId(),
                     user.getUsername());
-            throw new SecurityException(
-                    "Cross-tenant access attempt detected for FinancialEntry."
-            );
+            throw new SecurityException("Cross-tenant access attempt detected for FinancialEntry.");
         }
 
-        if (!this.createdBy.equals(user) && !user.canEditAnyEntry()) {
+        UUID createdById = getCreatedById();
+        if (createdById != null && !createdById.equals(user.getUserId()) && !user.canEditAnyEntry()) {
             throw new SecurityException(
                     String.format("User '%s' does not have permission to edit this entry",
                             user.getUsername())
@@ -623,13 +502,7 @@ public class FinancialEntry extends BaseTenantEntity {
         }
     }
 
-    private void updateAudit(User updater) {
-        this.updatedBy = updater;
-        this.updatedAt = LocalDateTime.now();
-    }
-
-    // === GETTERS ===
-    public UUID getId() { return id; }
+    // Getters
     public EntryNumber getEntryNumber() { return entryNumber; }
     public EntryStatus getStatus() { return status; }
     public RecordType getEntryType() { return entryType; }
@@ -655,19 +528,7 @@ public class FinancialEntry extends BaseTenantEntity {
     public List<FinancialEntryAttachment> getAttachments() {
         return attachments != null ? List.copyOf(attachments) : List.of();
     }
-    public User getCreatedBy() { return createdBy; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public User getUpdatedBy() { return updatedBy; }
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
-    public Long getVersion() { return version; }
 
-    // === EQUALS/HASHCODE ===
-
-    /**
-     * Equality is based on EntryNumber (business identity), not database UUID.
-     *
-     * DESIGN DECISION: EntryNumber is the Aggregate Root identity.
-     */
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

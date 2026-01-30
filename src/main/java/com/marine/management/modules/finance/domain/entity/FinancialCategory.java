@@ -21,11 +21,10 @@ import java.util.UUID;
         indexes = {
                 @Index(name = "idx_financial_categories_tenant_id", columnList = "tenant_id"),
                 @Index(name = "idx_financial_categories_tenant_code", columnList = "tenant_id, code"),
-                @Index(name = "idx_financial_categories_active", columnList = "is_active"),
+                @Index(name = "idx_financial_categories_enabled", columnList = "is_enabled"),
                 @Index(name = "idx_financial_categories_type", columnList = "category_type")
         }
 )
-
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class FinancialCategory extends BaseTenantEntity {
 
@@ -52,10 +51,10 @@ public class FinancialCategory extends BaseTenantEntity {
     private String description;
 
     @Column(name = "is_technical", nullable = false)
-    private boolean isTechnical = true;
+    private boolean technical = true;  //  Field name without 'is' prefix
 
-    @Column(name = "is_active", nullable = false)
-    private boolean isActive = true;
+    @Column(name = "is_enabled", nullable = false)
+    private boolean enabled = true;  //  Renamed from 'active' to 'enabled' to avoid conflict with isActive() from BaseAuditedEntity
 
     @Column(name = "display_order")
     private Integer displayOrder;
@@ -65,28 +64,13 @@ public class FinancialCategory extends BaseTenantEntity {
 
     protected FinancialCategory() {}
 
-    // === FACTORY METHOD ===
-    /**
-     * Creates a new financial category.
-     *
-     * CRITICAL: tenant_id is automatically injected by TenantEntityListener.
-     * No need to pass tenant as parameter!
-     *
-     * @param code category code (uppercase, unique per tenant)
-     * @param name category name
-     * @param categoryType INCOME or EXPENSE
-     * @param description optional description
-     * @param displayOrder sort order
-     * @param isTechnical technical category flag
-     * @return new FinancialCategory instance
-     */
     public static FinancialCategory create(
             String code,
             String name,
             RecordType categoryType,
             String description,
             Integer displayOrder,
-            boolean isTechnical
+            boolean technical
     ) {
         FinancialCategory category = new FinancialCategory();
         category.code = code.toUpperCase().trim();
@@ -94,59 +78,34 @@ public class FinancialCategory extends BaseTenantEntity {
         category.categoryType = categoryType;
         category.description = description != null ? description.trim() : "";
         category.displayOrder = displayOrder;
-        category.isTechnical = isTechnical;
+        category.technical = technical;  //  Consistent field name
         category.createdAt = LocalDateTime.now();
 
         category.validate();
         return category;
     }
 
-    // === BUSINESS METHODS ===
-
-    /**
-     * Updates category details.
-     *
-     * NOTE: Code cannot be changed (immutable for data integrity).
-     */
-    public void updateDetails(String name, String description, RecordType categoryType, Boolean isTechnical) {
+    public void updateDetails(String name, String description, RecordType categoryType, boolean technical) {
         this.name = Objects.requireNonNull(name, "Name cannot be null").trim();
         this.description = description != null ? description.trim() : "";
         this.categoryType = Objects.requireNonNull(categoryType, "Category type cannot be null");
-        this.isTechnical = Objects.requireNonNull(isTechnical, "isTechnical cannot be null");
+        this.technical = technical;  //  Consistent field name
 
         validate();
     }
 
-    /**
-     * Changes the display order for UI sorting.
-     */
     public void changeDisplayOrder(Integer newOrder) {
         this.displayOrder = newOrder;
     }
 
-    /**
-     * Activates the category (makes it available for use).
-     */
     public void activate() {
-        this.isActive = true;
+        this.enabled = true;  //  Consistent field name
     }
 
-    /**
-     * Deactivates the category (hides from UI, prevents new usage).
-     *
-     * NOTE: Existing entries with this category remain valid.
-     */
     public void deactivate() {
-        this.isActive = false;
+        this.enabled = false;  //  Consistent field name
     }
 
-    // === VALIDATION ===
-
-    /**
-     * Validates category business rules.
-     *
-     * NOTE: tenant_id validation is handled by BaseTenantEntity!
-     */
     private void validate() {
         if (code == null || code.trim().isEmpty()) {
             throw new IllegalStateException("Category code cannot be empty");
@@ -196,12 +155,20 @@ public class FinancialCategory extends BaseTenantEntity {
         return description;
     }
 
-    public boolean isTechnical() {
-        return isTechnical;
+    public boolean isTechnical() {  //  Getter with 'is' prefix
+        return technical;
     }
 
-    public boolean isActive() {
-        return isActive;
+    public void setTechnical(boolean technical) {  //  Setter without 'is' prefix
+        this.technical = technical;
+    }
+
+    public boolean isEnabled() {  //  Getter with 'is' prefix (renamed from isActive to avoid conflict)
+        return enabled;
+    }
+
+    public void setEnabled(boolean enabled) {  //  Setter without 'is' prefix
+        this.enabled = enabled;
     }
 
     public Integer getDisplayOrder() {
@@ -212,16 +179,6 @@ public class FinancialCategory extends BaseTenantEntity {
         return createdAt;
     }
 
-    // === EQUALS/HASHCODE ===
-
-    /**
-     * Equality based on UUID (primary key).
-     *
-     * WHY UUID (not tenant_id + code)?
-     * - UUID is stable (doesn't change after persist)
-     * - Safe for collections (HashSet, HashMap)
-     * - Generated immediately (not null in transient state)
-     */
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -237,8 +194,8 @@ public class FinancialCategory extends BaseTenantEntity {
     @Override
     public String toString() {
         return String.format(
-                "FinancialCategory{id=%s, tenantId=%s, code='%s', name='%s', active=%s}",
-                id, getTenantId(), code, name, isActive
+                "FinancialCategory{id=%s, tenantId=%s, code='%s', name='%s', enabled=%s}",
+                id, getTenantId(), code, name, enabled
         );
     }
 }

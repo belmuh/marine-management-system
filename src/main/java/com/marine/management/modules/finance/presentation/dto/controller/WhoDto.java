@@ -13,7 +13,7 @@ public record WhoDto(
         String code,
         String nameTr,
         String nameEn,
-        Boolean technical,
+        Boolean isTechnical,
         Long suggestedMainCategoryId
 ) {
     public static WhoDto from(Who who) {
@@ -22,7 +22,7 @@ public record WhoDto(
                 who.getCode(),
                 who.getNameTr(),
                 who.getNameEn(),
-                who.getTechnical(),
+                who.isTechnical(),
                 who.getSuggestedMainCategoryId()
         );
     }

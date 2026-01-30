@@ -46,33 +46,35 @@ public class WhoDataLoader implements CommandLineRunner {
         Long dockageId = DataLoaderSharedData.getMainCategoryId("DOCKAGE_BERTHS");
         Long provisionsId = DataLoaderSharedData.getMainCategoryId("PROVISIONS");
         Long administrationId = DataLoaderSharedData.getMainCategoryId("ADMINISTRATION");
+        Long fuelId = DataLoaderSharedData.getMainCategoryId("FUEL");
+
 
         List<Who> whoList = Arrays.asList(
                 // PERSONAL (6)
-                createWho("CAPTAIN", "Kaptan", "Captain", false, crewExpensesId),
-                createWho("CREW", "Personel", "Crew", false, crewExpensesId),
-                createWho("GUEST", "Misafir", "Guest", false, provisionsId),
-                createWho("OWNER", "Tekne Sahibi", "Owner", false, provisionsId),
-                createWho("OFFICE", "Ofis", "Office", false, administrationId),
-                createWho("MARINA", "Marina", "Marina", false, dockageId),
+                createWho("CAPTAIN", "Kaptan", "Captain", false, 1, crewExpensesId),
+                createWho("CREW", "Personel", "Crew", false, 2, crewExpensesId),
+                createWho("GUEST", "Misafir", "Guest", false, 3, provisionsId),
+                createWho("OWNER", "Tekne Sahibi", "Owner", false, 4, provisionsId),
+                createWho("OFFICE", "Ofis", "Office", false, 5, administrationId),
+                createWho("MARINA", "Marina", "Marina", false, 6, dockageId),
 
                 // TECHNICAL (10) - For both Maintenance and Fuel
-                createWho("MAIN_ENGINE", "Ana Makine", "Main Engine", true, null),
-                createWho("GENERATOR", "Jeneratör", "Generator", true, null),
-                createWho("TENDER", "Tender", "Tender", true, null),
-                createWho("JETSKI", "Jetski", "Jetski", true, maintenanceId),
-                createWho("AC_SYSTEM", "Klima", "AC System", true, maintenanceId),
-                createWho("WATERMAKER", "Su Yapıcı", "Watermaker", true, maintenanceId),
-                createWho("ELECTRICAL", "Elektrik", "Electrical", true, maintenanceId),
-                createWho("PLUMBING", "Tesisat", "Plumbing", true, maintenanceId),
-                createWho("ELECTRONICS", "Elektronik", "Electronics", true, maintenanceId),
-                createWho("HULL", "Tekne Gövdesi", "Hull", true, maintenanceId)
+                createWho("MAIN_ENGINE", "Ana Makine", "Main Engine", true, 7, maintenanceId),
+                createWho("GENERATOR", "Jeneratör", "Generator", true, 8,maintenanceId),
+                createWho("TENDER", "Tender", "Tender", true, 9, fuelId),
+                createWho("JETSKI", "Jetski", "Jetski", true, 10, fuelId),
+                createWho("AC_SYSTEM", "Klima", "AC System", true, 11, maintenanceId),
+                createWho("WATERMAKER", "Su Yapıcı", "Watermaker", true, 12, maintenanceId),
+                createWho("ELECTRICAL", "Elektrik", "Electrical", true, 13, maintenanceId),
+                createWho("PLUMBING", "Tesisat", "Plumbing", true, 14, maintenanceId),
+                createWho("ELECTRONICS", "Elektronik", "Electronics", true, 15, maintenanceId),
+                createWho("HULL", "Tekne Gövdesi", "Hull", true, 16, maintenanceId)
         );
 
         whoRepository.saveAll(whoList);
 
-        long technicalCount = whoList.stream().filter(Who::getTechnical).count();
-        long personalCount = whoList.stream().filter(w -> !w.getTechnical()).count();
+        long technicalCount = whoList.stream().filter(Who::isTechnical).count();
+        long personalCount = whoList.stream().filter(w -> !w.isTechnical()).count();
 
         logger.info("✅ ISS standard who list loaded successfully: {} entries", whoList.size());
         logger.info("   - Technical WHO: {}", technicalCount);
@@ -89,6 +91,7 @@ public class WhoDataLoader implements CommandLineRunner {
             String nameTr,
             String nameEn,
             boolean isTechnical,
+            int displayOrder,
             Long suggestedMainCategoryId
     ) {
         return Who.create(
@@ -96,6 +99,7 @@ public class WhoDataLoader implements CommandLineRunner {
                 nameTr,
                 nameEn,
                 isTechnical,
+                displayOrder,
                 suggestedMainCategoryId
         );
     }

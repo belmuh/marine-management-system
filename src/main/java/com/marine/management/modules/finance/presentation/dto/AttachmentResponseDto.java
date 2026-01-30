@@ -44,7 +44,7 @@ public record AttachmentResponseDto(
                 attachment.getUploadedBy() != null ?
                         UploaderInfo.from(attachment.getUploadedBy()) : null,
                 attachment.getUploadedAt(),
-                attachment.getEntry() != null ? attachment.getEntry().getId() : null
+                attachment.getEntry() != null ? attachment.getEntry().getEntryId() : null
         );
     }
 
@@ -59,7 +59,7 @@ public record AttachmentResponseDto(
             if (user == null) return null;
 
             return new UploaderInfo(
-                    user.getId(),
+                    user.getUserId(),
                     user.getUsername(),
                     user.getEmail(),
                     user.getFullName()

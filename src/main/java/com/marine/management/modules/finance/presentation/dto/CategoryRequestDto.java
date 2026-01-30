@@ -1,6 +1,5 @@
 package com.marine.management.modules.finance.presentation.dto;
 
-
 import com.marine.management.modules.finance.domain.enums.RecordType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -23,7 +22,7 @@ public record CategoryRequestDto(
 
         Integer displayOrder,
 
-        Boolean isTechnical
+        boolean technical  // Değişti: Boolean isTechnical → boolean technical
 ) {
 
 }

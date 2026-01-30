@@ -16,10 +16,15 @@ import java.util.UUID;
 public interface FinancialCategoryRepository extends JpaRepository<FinancialCategory, UUID> {
 
     Optional<FinancialCategory> findByCode(String code);
-    List<FinancialCategory> findByIsActiveTrueOrderByDisplayOrderAsc();
+
+    //  isActive → enabled
+    List<FinancialCategory> findByEnabledTrueOrderByDisplayOrderAsc();
+
     List<FinancialCategory> findAllByOrderByDisplayOrderAsc();
 
-    long countByIsActiveTrue();
+    //  isActive → enabled
+    long countByEnabledTrue();
+
     boolean existsByCode(String code);
 
     @Query("SELECT c FROM FinancialCategory c WHERE " +
@@ -27,13 +32,14 @@ public interface FinancialCategoryRepository extends JpaRepository<FinancialCate
             "LOWER(c.name) LIKE LOWER(CONCAT('%', :searchTerm, '%'))")
     List<FinancialCategory> search(@Param("searchTerm") String searchTerm);
 
+    //  isActive → enabled
     @Query("SELECT c, COUNT(e.id) as usageCount " +
             "FROM FinancialCategory c " +
             "LEFT JOIN FinancialEntry e ON e.category.id = c.id " +
             "AND e.entryDate > :oneYearAgo " +
             "AND e.entryType = :entryType " +
             "WHERE c.categoryType = :entryType " +
-            "AND c.isActive = true " +
+            "AND c.enabled = true " +
             "GROUP BY c.id " +
             "ORDER BY COUNT(e.id) DESC, c.displayOrder ASC")
     List<CategoryWithUsageCount> findByTypeWithUsageCount(

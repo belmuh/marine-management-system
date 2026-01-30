@@ -44,7 +44,7 @@ public class AttachmentService {
     }
 
     // ============================================
-    // PUBLIC API
+    // PUBLIC API - ⭐ All return DTOs
     // ============================================
 
     /**
@@ -58,7 +58,7 @@ public class AttachmentService {
         // 1. Validate file
         validator.validate(file);
 
-        // 2. Store file
+        // 2. Store file and create attachment entity
         FinancialEntryAttachment attachment = storeAndCreateAttachment(file, uploadedBy);
 
         // 3. Add to entry
@@ -69,6 +69,7 @@ public class AttachmentService {
         );
         entryService.addAttachment(command);
 
+        // ⭐ Return DTO (transaction still active)
         return AttachmentResponseDto.from(attachment);
     }
 
@@ -86,14 +87,28 @@ public class AttachmentService {
     }
 
     /**
+     * Get all attachments for an entry
+     */
+    @Transactional(readOnly = true)
+    public List<AttachmentResponseDto> getAttachments(UUID entryId) {
+        FinancialEntry entry = findEntryOrThrow(entryId);
+
+        // ⭐ DTO conversion in transaction (lazy loading works)
+        return entry.getAttachments().stream()
+                .map(AttachmentResponseDto::from)
+                .collect(Collectors.toList());
+    }
+
+    /**
      * Download an attachment
      */
+    @Transactional(readOnly = true)
     public ResponseEntity<Resource> downloadAttachment(
             UUID entryId,
             UUID attachmentId
     ) {
-        var attachment = findAttachmentOrThrow(entryId, attachmentId);
-        var resource = fileStorageService.loadFileAsResource(attachment.getFileName());
+        FinancialEntryAttachment attachment = findAttachmentOrThrow(entryId, attachmentId);
+        Resource resource = fileStorageService.loadFileAsResource(attachment.getFileName());
 
         return createFileDownloadResponse(resource, attachment);
     }
@@ -106,7 +121,7 @@ public class AttachmentService {
             UUID attachmentId,
             User requestedBy
     ) {
-        var attachment = findAttachmentOrThrow(entryId, attachmentId);
+        FinancialEntryAttachment attachment = findAttachmentOrThrow(entryId, attachmentId);
 
         // Remove from entry
         var command = new RemoveAttachmentCommand(
@@ -120,20 +135,8 @@ public class AttachmentService {
         fileStorageService.deleteFile(attachment.getFileName());
     }
 
-    /**
-     * Get all attachments for an entry
-     */
-    @Transactional(readOnly = true)
-    public List<AttachmentResponseDto> getAttachments(UUID entryId) {
-        var entry = findEntryOrThrow(entryId);
-
-        return entry.getAttachments().stream()
-                .map(AttachmentResponseDto::from)
-                .collect(Collectors.toList());
-    }
-
     // ============================================
-    // HELPER METHODS
+    // HELPER METHODS - Internal use only
     // ============================================
 
     private FinancialEntryAttachment storeAndCreateAttachment(
@@ -153,12 +156,14 @@ public class AttachmentService {
     }
 
     private FinancialEntry findEntryOrThrow(UUID id) {
+        // ⚠️ This returns Entity, but it's internal use only
+        // External API uses entryService.getById() which returns DTO
         return entryService.findById(id)
                 .orElseThrow(() -> EntryNotFoundException.withId(id));
     }
 
     private FinancialEntryAttachment findAttachmentOrThrow(UUID entryId, UUID attachmentId) {
-        var entry = findEntryOrThrow(entryId);
+        FinancialEntry entry = findEntryOrThrow(entryId);
 
         return entry.getAttachments().stream()
                 .filter(a -> a.getId().equals(attachmentId))
@@ -181,9 +186,10 @@ public class AttachmentService {
             encodedFilename = attachment.getOriginalFileName()
                     .replaceAll("[^a-zA-Z0-9._-]", "_");
         }
+
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename*=UTF-8''" + encodedFilename)  // ✅ RFC 5987
+                        "attachment; filename*=UTF-8''" + encodedFilename)  // RFC 5987
                 .header(HttpHeaders.CONTENT_TYPE, attachment.getContentType())
                 .body(resource);
     }

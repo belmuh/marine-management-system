@@ -4,7 +4,6 @@ import com.marine.management.modules.auth.domain.RefreshToken;
 import com.marine.management.modules.auth.infrastructure.RefreshTokenRepository;
 import com.marine.management.modules.users.domain.User;
 import com.marine.management.modules.users.infrastructure.UserRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,34 +13,33 @@ import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.UUID;
 
-
 @Service
 @Transactional
 public class RefreshTokenService {
 
-    @Autowired
-    private RefreshTokenRepository refreshTokenRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
+    private final UserRepository userRepository;
 
-    @Autowired
-    private UserRepository userRepository;
-
-    // 1 gün
-    private static final long REFRESH_TOKEN_EXPIRATION = 24 * 60 * 60 * 1000L;
+    public RefreshTokenService(RefreshTokenRepository refreshTokenRepository,
+                               UserRepository userRepository) {
+        this.refreshTokenRepository = refreshTokenRepository;
+        this.userRepository = userRepository;
+    }
 
     public RefreshToken createRefreshToken(UUID userId, String ipAddress, String userAgent) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // Eski refresh token'ları sil
+        // Delete old refresh tokens
         refreshTokenRepository.deleteByUserId(userId);
 
-        RefreshToken refreshToken = new RefreshToken();
-        refreshToken.setUser(user);
-        refreshToken.setToken(generateSecureToken());
-        refreshToken.setExpiryDate(LocalDateTime.now().plusDays(7));
-        refreshToken.setCreatedAt(LocalDateTime.now());
-        refreshToken.setIpAddress(ipAddress);
-        refreshToken.setUserAgent(userAgent);
+        RefreshToken refreshToken = new RefreshToken(
+                generateSecureToken(),
+                user,
+                LocalDateTime.now().plusDays(7),
+                ipAddress,
+                userAgent
+        );
 
         return refreshTokenRepository.save(refreshToken);
     }
@@ -50,7 +48,7 @@ public class RefreshTokenService {
         RefreshToken refreshToken = refreshTokenRepository.findByToken(token)
                 .orElseThrow(() -> new RuntimeException("Invalid refresh token"));
 
-        if (refreshToken.getExpiryDate().isBefore(LocalDateTime.now())) {
+        if (refreshToken.isExpired()) {
             refreshTokenRepository.delete(refreshToken);
             throw new RuntimeException("Refresh token expired");
         }
@@ -63,15 +61,11 @@ public class RefreshTokenService {
                 .ifPresent(refreshTokenRepository::delete);
     }
 
-    @Scheduled(cron = "0 0 2 * * ?") // Her gün saat 2'de
+    @Scheduled(cron = "0 0 2 * * ?")
     public void cleanupExpiredTokens() {
         refreshTokenRepository.deleteExpiredTokens(LocalDateTime.now());
-        System.out.println("Expired refresh tokens cleaned up");
     }
 
-    /**
-     * Güvenli random token oluştur
-     */
     private String generateSecureToken() {
         byte[] randomBytes = new byte[64];
         new SecureRandom().nextBytes(randomBytes);

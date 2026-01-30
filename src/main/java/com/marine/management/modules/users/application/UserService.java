@@ -6,6 +6,8 @@ import com.marine.management.modules.users.domain.User;
 import com.marine.management.modules.users.infrastructure.UserRepository;
 import com.marine.management.shared.security.Role;
 import com.marine.management.shared.multitenant.TenantContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
@@ -21,11 +23,12 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class UserService {
 
+    private static final Logger log = LoggerFactory.getLogger(UserService.class);
+
     private final UserRepository userRepository;
     private final OrganizationRepository organizationRepository;
     private final PasswordEncoder passwordEncoder;
 
-    //  Constructor updated
     public UserService(
             UserRepository userRepository,
             OrganizationRepository organizationRepository,
@@ -37,15 +40,9 @@ public class UserService {
     }
 
     // ============================================
-    // TENANT-AWARE QUERIES (Use TenantContext)
+    // TENANT CONTEXT
     // ============================================
 
-    /**
-     * Gets current tenant with guard clause.
-     *
-     * CRITICAL: Fails fast if no tenant context.
-     * Better than NPE deep in the code.
-     */
     private Organization getCurrentTenantOrThrow() {
         if (!TenantContext.hasTenantContext()) {
             throw new AccessDeniedException(
@@ -53,175 +50,238 @@ public class UserService {
             );
         }
 
-        Long tenantId = TenantContext.getCurrentTenantId();  // ✅ FIXED: getCurrentTenant() → getCurrentTenantId()
+        Long tenantId = TenantContext.getCurrentTenantId();
 
         return organizationRepository.findById(tenantId)
-                .orElseThrow(() -> new IllegalStateException("Tenant not found: " + tenantId));
+                .orElseThrow(() -> new IllegalStateException(
+                        "Tenant organization not found: " + tenantId
+                ));
     }
 
-    /**
-     * List all users in current tenant's organization.
-     */
-    public List<User> getAllUsers() {  // ✅ RENAMED: Controller expects getAllUsers()
+    // ============================================
+    // TENANT-SCOPED QUERIES
+    // ============================================
+
+    public List<User> getAllUsers() {
         Organization currentOrg = getCurrentTenantOrThrow();
         return userRepository.findByOrganization(currentOrg);
     }
 
-    /**
-     * List users with pagination in current organization.
-     */
     public Page<User> listUsersInCurrentOrganization(Pageable pageable) {
         Organization currentOrg = getCurrentTenantOrThrow();
         return userRepository.findByOrganization(currentOrg, pageable);
     }
 
-    /**
-     * Find user by ID in current organization.
-     *
-     * IMPROVED: Uses explicit repository method instead of filter.
-     * - Single query (more efficient)
-     * - Clear intent
-     * - Database-level guarantee
-     */
     public Optional<User> findUserById(UUID id) {
         Organization currentOrg = getCurrentTenantOrThrow();
         return userRepository.findByIdAndOrganization(id, currentOrg);
     }
 
-    /**
-     * Find user by ID or throw exception.
-     */
-    public User getUserByIdOrThrow(UUID id) {  // ✅ RENAMED: Controller expects getUserByIdOrThrow()
+    public User getUserByIdOrThrow(UUID id) {
         return findUserById(id)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "User not found or does not belong to your organization: " + id
                 ));
     }
 
-    /**
-     * Count users in current organization.
-     */
     public long countUsersInCurrentOrganization() {
         Organization currentOrg = getCurrentTenantOrThrow();
         return userRepository.countByOrganization(currentOrg);
     }
 
     // ============================================
-    // GLOBAL QUERIES (No tenant filter)
+    // GLOBAL QUERIES (Authentication)
     // ============================================
 
-    public Optional<User> findByUsername(String username) {
-        return userRepository.findByUsername(username);
+    /**
+     * Find user by email (for authentication).
+     */
+    public Optional<User> findByEmail(String email) {
+        return userRepository.findByEmail(email);
     }
 
-    public boolean usernameExists(String username) {
-        return userRepository.existsByUsername(username);
-    }
-
-    public boolean emailExists(String email) {
-        return userRepository.existsByEmail(email);
-    }
-
-    // ✅ NEW: Controller expects these methods
-    public boolean isUsernameAvailable(String username) {
-        return !userRepository.existsByUsername(username);
-    }
-
+    /**
+     * Check if email is available for registration.
+     */
     public boolean isEmailAvailable(String email) {
         return !userRepository.existsByEmail(email);
     }
 
     // ============================================
-    // WRITE OPERATIONS
+    // USER CREATION
     // ============================================
 
+    /**
+     * Register new user with default USER role.
+     */
     @Transactional
-    public User registerUser(String username, String email, String plainPassword, Organization organization) {
-        if (userRepository.existsByUsername(username)) {
-            throw new IllegalArgumentException("Username already exists");
-        }
-        if (userRepository.existsByEmail(email)) {
-            throw new IllegalArgumentException("Email already exists");
-        }
-
-        String hashedPassword = passwordEncoder.encode(plainPassword);
-        User user = User.createWithHashedPassword(username, email, hashedPassword, Role.USER, organization);
-
-        return userRepository.save(user);
+    public User registerUser(
+            String email,
+            String firstName,
+            String lastName,
+            String plainPassword,
+            Organization organization
+    ) {
+        return registerUserWithRole(
+                email,
+                firstName,
+                lastName,
+                plainPassword,
+                Role.USER,
+                organization
+        );
     }
 
+    /**
+     * Register new user with specific role.
+     *
+     * @param email Email (unique globally, used for login)
+     * @param firstName First name
+     * @param lastName Last name
+     * @param plainPassword Plain text password (will be hashed)
+     * @param role User role
+     * @param organization Organization
+     * @return Created user
+     */
     @Transactional
     public User registerUserWithRole(
-            String username,
             String email,
+            String firstName,
+            String lastName,
             String plainPassword,
             Role role,
             Organization organization
     ) {
-        if (userRepository.existsByUsername(username)) {
-            throw new IllegalArgumentException("Username already exists");
-        }
+        // Validate email uniqueness
         if (userRepository.existsByEmail(email)) {
-            throw new IllegalArgumentException("Email already exists");
+            log.warn("Failed to create user: email already exists: {}", email);
+            throw new IllegalArgumentException("Email already exists: " + email);
         }
 
+        // Hash password
         String hashedPassword = passwordEncoder.encode(plainPassword);
-        User user = User.createWithHashedPassword(username, email, hashedPassword, role, organization);
 
-        return userRepository.save(user);
+        // Create user
+        User user = User.createWithHashedPassword(
+                email,
+                firstName,
+                lastName,
+                hashedPassword,
+                role,
+                organization
+        );
+
+        User savedUser = userRepository.save(user);
+
+        log.info("Created user: {} in organization: {}",
+                savedUser.getId(),
+                organization.getOrganizationId());
+
+        return savedUser;
     }
 
-    // ✅ NEW: Controller expects these methods
+    // ============================================
+    // USER UPDATES
+    // ============================================
+
+    /**
+     * Update user profile (email, firstName, lastName).
+     *
+     * CRITICAL: Changing email changes login credential!
+     *
+     * @param userId User ID
+     * @param email New email
+     * @param firstName New first name
+     * @param lastName New last name
+     * @return Updated user
+     */
     @Transactional
-    public User updateUserProfile(UUID userId, String username, String email) {
+    public User updateUserProfile(
+            UUID userId,
+            String email,
+            String firstName,
+            String lastName
+    ) {
         User user = getUserByIdOrThrow(userId);
 
-        // Check username uniqueness (exclude current user)
-        if (!user.getUsername().equals(username) && userRepository.existsByUsername(username)) {
-            throw new IllegalArgumentException("Username already exists");
-        }
-
-        // Check email uniqueness (exclude current user)
+        // Validate email uniqueness (exclude current user)
         if (!user.getEmail().equals(email) && userRepository.existsByEmail(email)) {
-            throw new IllegalArgumentException("Email already exists");
+            throw new IllegalArgumentException("Email already exists: " + email);
         }
 
-        user.updateProfile(username, email);
+        // Log email change (security critical)
+        if (!user.getEmail().equals(email)) {
+            log.warn("User {} changing email from {} to {}",
+                    user.getId(), user.getEmail(), email);
+        }
+
+        // Update profile
+        user.updateProfile(email, firstName, lastName);
+
         return userRepository.save(user);
     }
 
+    /**
+     * Update user role (admin only).
+     */
     @Transactional
     public User updateUserRole(UUID userId, Role newRole) {
         User user = getUserByIdOrThrow(userId);
+
+        log.info("Changing role for user {} from {} to {}",
+                user.getId(), user.getRole(), newRole);
+
         user.changeRole(newRole);
         return userRepository.save(user);
     }
 
+    /**
+     * Change user password.
+     */
     @Transactional
     public void changeUserPassword(UUID userId, String newPassword) {
         User user = getUserByIdOrThrow(userId);
+
         String hashedPassword = passwordEncoder.encode(newPassword);
         user.changePassword(hashedPassword);
+
         userRepository.save(user);
+
+        log.info("Password changed for user: {}", user.getId());
     }
 
+    /**
+     * Activate user account.
+     */
     @Transactional
     public User activate(UUID userId) {
         User user = getUserByIdOrThrow(userId);
         user.activate();
+
+        log.info("Activated user: {}", user.getId());
         return userRepository.save(user);
     }
 
+    /**
+     * Deactivate user account.
+     */
     @Transactional
     public User deactivate(UUID userId) {
         User user = getUserByIdOrThrow(userId);
         user.deactivate();
+
+        log.info("Deactivated user: {}", user.getId());
         return userRepository.save(user);
     }
 
+    /**
+     * Delete user (hard delete).
+     */
     @Transactional
     public void deleteUser(UUID userId) {
         User user = getUserByIdOrThrow(userId);
+
+        log.warn("Deleting user: {}", user.getId());
         userRepository.delete(user);
     }
 }

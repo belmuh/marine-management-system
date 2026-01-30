@@ -36,7 +36,7 @@ public class FinancialCategoryController {
                 request.categoryType(),
                 request.description(),
                 request.displayOrder(),
-                request.isTechnical()
+                request.technical()
         );
 
         return ResponseEntity
@@ -115,7 +115,7 @@ public class FinancialCategoryController {
                 request.name(),
                 request.description(),
                 request.categoryType(),
-                request.isTechnical()
+                request.technical()
         );
 
         return ResponseEntity.ok(CategoryResponseDto.from(category));

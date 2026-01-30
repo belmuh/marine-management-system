@@ -52,6 +52,46 @@ public record Period(LocalDate startDate, LocalDate endDate) {
         return !date.isBefore(startDate) && !date.isAfter(endDate);
     }
 
+    //  Yeni - Period'u formatla
+    public String format() {
+        if (isFullMonth()) {
+            // "2026-01" format
+            return String.format("%d-%02d",
+                    startDate.getYear(),
+                    startDate.getMonthValue()
+            );
+        } else if (isFullYear()) {
+            // "2026" format
+            return String.valueOf(startDate.getYear());
+        } else {
+            // "2026-01-15 to 2026-02-20" format
+            return startDate + " to " + endDate;
+        }
+    }
+
+    //  Yeni - Tam ay mı?
+    public boolean isFullMonth() {
+        return startDate.getDayOfMonth() == 1 &&
+                endDate.equals(startDate.withDayOfMonth(startDate.lengthOfMonth()));
+    }
+
+    //  Yeni - Tam yıl mı?
+    public boolean isFullYear() {
+        return startDate.getDayOfYear() == 1 &&
+                endDate.getDayOfYear() == endDate.lengthOfYear();
+    }
+
+    //  Yeni - Detaylı format (UI için)
+    public String formatDetailed() {
+        if (isFullMonth()) {
+            return startDate.getMonth().name() + " " + startDate.getYear();
+        } else if (isFullYear()) {
+            return "Year " + startDate.getYear();
+        } else {
+            return startDate + " to " + endDate;
+        }
+    }
+
     private static void validatePeriod(LocalDate start, LocalDate end) {
         if (start == null || end == null) {
             throw new IllegalArgumentException("Period dates cannot be null");
@@ -63,13 +103,11 @@ public record Period(LocalDate startDate, LocalDate endDate) {
         }
     }
 
-    // Yardımcı method - period string'den parse
     public static Period parse(String periodStr, String periodType) {
         if ("YEAR".equals(periodType)) {
             int year = Integer.parseInt(periodStr);
             return Period.ofYear(year);
         } else if ("MONTH".equals(periodType)) {
-            // "2024-01" format
             String[] parts = periodStr.split("-");
             int year = Integer.parseInt(parts[0]);
             int month = Integer.parseInt(parts[1]);

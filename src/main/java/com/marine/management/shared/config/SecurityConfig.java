@@ -51,7 +51,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))  // ✅ Direkt method çağrısı
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))  // Direkt method çağrısı
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
@@ -63,6 +63,8 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health").permitAll()
 
                         // Protected endpoints (authority-based)
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+
                         .requestMatchers("/api/users/**")
                         .hasAnyAuthority("SUPER_ADMIN", "ADMIN", "MANAGER")
 
@@ -75,7 +77,7 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(tenantFilter, AuthorizationFilter.class)
+                .addFilterAfter(tenantFilter, JwtAuthenticationFilter.class)
                 .headers(headers -> headers
                         .frameOptions(frame -> frame.deny())
                 );
@@ -99,28 +101,28 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // ✅ Allow Angular origin
+        // Allow Angular origin
         configuration.setAllowedOrigins(List.of(
                 "http://localhost:4200",
                 "https://localhost:4200",
                 "http://127.0.0.1:4200"
         ));
 
-        // ✅ Allow all HTTP methods
+        // Allow all HTTP methods
         configuration.setAllowedMethods(Arrays.asList(
                 "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"
         ));
 
-        // ✅ Allow all headers
+        // Allow all headers
         configuration.setAllowedHeaders(List.of("*"));
 
-        // ✅ Allow credentials (cookies, auth headers)
+        // Allow credentials (cookies, auth headers)
         configuration.setAllowCredentials(true);
 
-        // ✅ Expose Authorization header to frontend
+        // Expose Authorization header to frontend
         configuration.setExposedHeaders(List.of("Authorization"));
 
-        // ✅ Cache preflight for 1 hour
+        // Cache preflight for 1 hour
         configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

@@ -39,7 +39,7 @@ public class AuditingEntityListener {
 
         Object principal = auth.getPrincipal();
         if (principal instanceof User user) {
-            return user.getId();
+            return user.getUserId();
         }
 
         return null;

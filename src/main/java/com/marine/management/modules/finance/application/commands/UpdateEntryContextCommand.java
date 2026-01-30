@@ -6,8 +6,8 @@ import java.util.UUID;
 
 public record UpdateEntryContextCommand(
         UUID entryId,
-        Long whoId,
-        Long mainCategoryId,
+        UUID whoId,
+        UUID mainCategoryId,
         String recipient,
         String country,
         String city,

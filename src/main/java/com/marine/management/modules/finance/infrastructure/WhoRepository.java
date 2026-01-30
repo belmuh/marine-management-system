@@ -13,7 +13,7 @@ public interface WhoRepository extends JpaRepository<Who, Long> {
 
     boolean existsByCode(String code);
 
-    List<Who> findByTechnicalIs(Boolean isTechnical);
+    List<Who> findByTechnical(Boolean isTechnical);
 
     List<Who> findBySuggestedMainCategoryId(Long mainCategoryId);
 }

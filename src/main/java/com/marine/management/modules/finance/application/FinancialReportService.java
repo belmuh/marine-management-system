@@ -1,12 +1,18 @@
 package com.marine.management.modules.finance.application;
 
+import com.marine.management.modules.finance.application.dto.PivotTreeReportResponse;
+import com.marine.management.modules.finance.application.dto.TreeNodeDTO;
+import com.marine.management.modules.finance.application.dto.TreeReportResponse;
 import com.marine.management.modules.finance.domain.enums.RecordType;
-import com.marine.management.modules.finance.domain.model.AnnualReport;
-import com.marine.management.modules.finance.domain.vo.Period;
-import com.marine.management.modules.finance.domain.model.PeriodReport;
-import com.marine.management.modules.finance.domain.service.ReportGenerator;
+import com.marine.management.modules.finance.domain.model.PivotReportProjection;
+import com.marine.management.modules.finance.domain.model.TreeReportProjection;
+import com.marine.management.modules.finance.domain.service.PivotReportBuilder;
+import com.marine.management.modules.finance.domain.service.TreeReportBuilder;
 import com.marine.management.modules.finance.infrastructure.FinancialEntryRepository;
+import com.marine.management.modules.finance.infrastructure.FinancialEntryReportRepository;
 import com.marine.management.modules.finance.presentation.dto.reports.DashboardSummary;
+import com.marine.management.modules.finance.presentation.dto.reports.PivotReportRequest;
+import com.marine.management.modules.finance.presentation.dto.reports.TreeReportRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,32 +20,27 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
-/**
- * Application service for financial reporting and analytics.
- * Handles dashboard summaries, period reports, and statistical queries.
- */
 @Service
 @Transactional(readOnly = true)
 public class FinancialReportService {
 
     private final FinancialEntryRepository entryRepository;
-    private final ReportGenerator reportGenerator;
+    private final FinancialEntryReportRepository reportRepository;
+    private final TreeReportBuilder treeBuilder;
+    private final PivotReportBuilder pivotBuilder;
 
     public FinancialReportService(
             FinancialEntryRepository entryRepository,
-            ReportGenerator reportGenerator
+            FinancialEntryReportRepository reportRepository,
+            TreeReportBuilder treeBuilder,
+            PivotReportBuilder pivotBuilder
     ) {
         this.entryRepository = entryRepository;
-        this.reportGenerator = reportGenerator;
+        this.reportRepository = reportRepository;
+        this.treeBuilder = treeBuilder;
+        this.pivotBuilder = pivotBuilder;
     }
 
-    // ============================================
-    // DASHBOARD SUMMARY
-    // ============================================
-
-    /**
-     * Get dashboard summary with totals and counts for a date range
-     */
     public DashboardSummary getDashboardSummary(LocalDate startDate, LocalDate endDate) {
         BigDecimal totalIncome = getTotalByType(RecordType.INCOME, startDate, endDate);
         BigDecimal totalExpense = getTotalByType(RecordType.EXPENSE, startDate, endDate);
@@ -48,139 +49,61 @@ public class FinancialReportService {
         long incomeCount = countByType(RecordType.INCOME, startDate, endDate);
         long expenseCount = countByType(RecordType.EXPENSE, startDate, endDate);
 
-        return new DashboardSummary(
-                totalIncome,
-                totalExpense,
-                balance,
-                incomeCount,
-                expenseCount
-        );
+        return new DashboardSummary(totalIncome, totalExpense, balance, incomeCount, expenseCount);
     }
 
-    // ============================================
-    // PERIOD REPORTS
-    // ============================================
-
-    /**
-     * Get period totals (income/expense breakdown)
-     */
-    public List<FinancialEntryRepository.PeriodTotalProjection> getPeriodTotals(
-            LocalDate startDate,
-            LocalDate endDate
-    ) {
-        return entryRepository.findPeriodTotals(startDate, endDate);
+    public List<FinancialEntryReportRepository.PeriodTotalProjection> getPeriodTotals(
+            LocalDate startDate, LocalDate endDate) {
+        return reportRepository.findPeriodTotals(startDate, endDate);
     }
 
-    /**
-     * Get category totals for a specific entry type and date range
-     */
-    public List<FinancialEntryRepository.CategoryTotalProjection> getCategoryTotals(
-            RecordType entryType,
-            LocalDate startDate,
-            LocalDate endDate
-    ) {
-        return entryRepository.findCategoryTotals(entryType, startDate, endDate);
+    public List<FinancialEntryReportRepository.CategoryTotalProjection> getCategoryTotals(
+            RecordType entryType, LocalDate startDate, LocalDate endDate) {
+        return reportRepository.findCategoryTotals(entryType, startDate, endDate);
     }
 
-    /**
-     * Get expense totals by category
-     */
-    public List<FinancialEntryRepository.CategoryTotalProjection> getExpenseTotals(
-            LocalDate startDate,
-            LocalDate endDate
-    ) {
-        return entryRepository.findExpenseTotals(startDate, endDate);
+    public List<FinancialEntryReportRepository.CategoryTotalProjection> getExpenseTotals(
+            LocalDate startDate, LocalDate endDate) {
+        return reportRepository.findExpenseTotals(startDate, endDate);
     }
 
-    /**
-     * Get income totals by category
-     */
-    public List<FinancialEntryRepository.CategoryTotalProjection> getIncomeTotals(
-            LocalDate startDate,
-            LocalDate endDate
-    ) {
-        return entryRepository.findIncomeTotals(startDate, endDate);
+    public List<FinancialEntryReportRepository.CategoryTotalProjection> getIncomeTotals(
+            LocalDate startDate, LocalDate endDate) {
+        return reportRepository.findIncomeTotals(startDate, endDate);
     }
 
-    /**
-     * Get monthly totals for charts and trend analysis
-     */
-    public List<FinancialEntryRepository.MonthlyTotalProjection> getMonthlyTotals(
-            LocalDate startDate,
-            LocalDate endDate
-    ) {
-        return entryRepository.findMonthlyTotals(startDate, endDate);
+    public List<FinancialEntryReportRepository.MonthlyTotalProjection> getMonthlyTotals(
+            LocalDate startDate, LocalDate endDate) {
+        return reportRepository.findMonthlyTotals(startDate, endDate);
     }
 
-    // ============================================
-    // ANNUAL & PERIOD REPORTS
-    // ============================================
-
-    /**
-     * Generate comprehensive annual report with category breakdowns
-     */
-    public AnnualReport generateAnnualReport(int year) {
-        var entries = entryRepository.findByEntryDateBetweenOrderByEntryDateDesc(
-                LocalDate.of(year, 1, 1),
-                LocalDate.of(year, 12, 31)
-        );
-        return reportGenerator.generateAnnualReport(entries, year);
+    public BigDecimal getTotalByType(RecordType entryType, LocalDate startDate, LocalDate endDate) {
+        return reportRepository.sumByEntryTypeAndDateRange(entryType, startDate, endDate);
     }
 
-    /**
-     * Generate period report for custom date range
-     */
-    public PeriodReport generatePeriodReport(LocalDate startDate, LocalDate endDate) {
-        Period period = Period.of(startDate, endDate);
-        var entries = entryRepository.findByEntryDateBetweenOrderByEntryDateDesc(
-                startDate,
-                endDate
-        );
-        return reportGenerator.generatePeriodReport(entries, period);
-    }
-
-    // ============================================
-    // STATISTICS
-    // ============================================
-
-    /**
-     * Get total amount by entry type for a date range
-     */
-    public BigDecimal getTotalByType(
-            RecordType entryType,
-            LocalDate startDate,
-            LocalDate endDate
-    ) {
-        return entryRepository.sumByEntryTypeAndDateRange(entryType, startDate, endDate);
-    }
-
-    /**
-     * Count entries by type for a date range
-     */
-    public long countByType(
-            RecordType entryType,
-            LocalDate startDate,
-            LocalDate endDate
-    ) {
+    public long countByType(RecordType entryType, LocalDate startDate, LocalDate endDate) {
         return entryRepository.countByEntryTypeAndEntryDateBetween(entryType, startDate, endDate);
     }
 
-    /**
-     * Get category breakdown by month for a specific year
-     */
-    public List<FinancialEntryRepository.CategoryMonthBreakdownProjection> getCategoryMonthBreakdown(
-            RecordType entryType,
-            int year
-    ) {
-        return entryRepository.findCategoryMonthBreakdown(entryType, year);
+    public List<FinancialEntryReportRepository.CategoryMonthBreakdownProjection> getCategoryMonthBreakdown(
+            RecordType entryType, int year) {
+        return reportRepository.findCategoryMonthBreakdown(entryType, year);
     }
 
-    /**
-     * Get monthly income/expense totals for a year
-     */
-    public List<FinancialEntryRepository.MonthlyIncomeExpenseProjection> getMonthlyIncomeExpense(
-            int year
-    ) {
-        return entryRepository.findMonthlyIncomeExpense(year);
+    public List<FinancialEntryReportRepository.MonthlyIncomeExpenseProjection> getMonthlyIncomeExpense(int year) {
+        return reportRepository.findMonthlyIncomeExpense(year);
+    }
+
+
+
+    public PivotTreeReportResponse generatePivotReport(PivotReportRequest request) {
+        int year = request.year();
+
+        List<PivotReportProjection> projections = reportRepository.findPivotProjections(
+                RecordType.EXPENSE,
+                year
+        );
+
+        return pivotBuilder.buildPivotReport(year, request.currency(), projections);
     }
 }

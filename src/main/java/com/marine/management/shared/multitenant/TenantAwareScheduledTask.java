@@ -60,7 +60,7 @@ public abstract class TenantAwareScheduledTask {
                         tenant.getYachtName(),
                         tenant.getId());
 
-                TenantContext.setCurrentTenantId(tenant.getId());
+                TenantContext.setCurrentTenantId(tenant.getOrganizationId());
 
                 task.execute(tenant);
 

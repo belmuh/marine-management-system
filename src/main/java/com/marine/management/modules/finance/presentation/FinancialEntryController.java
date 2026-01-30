@@ -2,12 +2,10 @@ package com.marine.management.modules.finance.presentation;
 
 import com.marine.management.modules.finance.application.AttachmentService;
 import com.marine.management.modules.finance.application.FinancialEntryService;
-import com.marine.management.modules.finance.application.commands.*;
 import com.marine.management.modules.finance.application.mapper.EntryRequestMapper;
 import com.marine.management.modules.finance.presentation.dto.*;
 import com.marine.management.modules.finance.presentation.dto.controller.*;
 import com.marine.management.modules.users.domain.User;
-import com.marine.management.shared.exceptions.EntryNotFoundException;
 import jakarta.validation.Valid;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
@@ -52,11 +50,9 @@ public class FinancialEntryController {
             @AuthenticationPrincipal User currentUser
     ) {
         var command = requestMapper.toCreateEntryCommand(request, currentUser);
-        var entry = entryService.createEntry(command);
+        var dto = entryService.createEntry(command); // ⭐ Service returns DTO
 
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(EntryResponseDto.from(entry));
+        return ResponseEntity.status(HttpStatus.CREATED).body(dto);
     }
 
     // ============================================
@@ -65,20 +61,12 @@ public class FinancialEntryController {
 
     @GetMapping("/{id}")
     public ResponseEntity<EntryResponseDto> getById(@PathVariable UUID id) {
-        var entry = entryService.findById(id)
-                .orElseThrow(() -> EntryNotFoundException.withId(id));
-
-        return ResponseEntity.ok(EntryResponseDto.from(entry));
+        return ResponseEntity.ok(entryService.getById(id)); // ⭐ Service returns DTO
     }
 
     @GetMapping("/number/{entryNumber}")
-    public ResponseEntity<EntryResponseDto> getByEntryNumber(
-            @PathVariable String entryNumber
-    ) {
-        var entry = entryService.findByEntryNumber(entryNumber)
-                .orElseThrow(() -> EntryNotFoundException.withEntryNumber(entryNumber));
-
-        return ResponseEntity.ok(EntryResponseDto.from(entry));
+    public ResponseEntity<EntryResponseDto> getByEntryNumber(@PathVariable String entryNumber) {
+        return ResponseEntity.ok(entryService.getByEntryNumber(entryNumber)); // ⭐ Service returns DTO
     }
 
     @GetMapping("/my-entries")
@@ -86,8 +74,7 @@ public class FinancialEntryController {
             @AuthenticationPrincipal User currentUser,
             @PageableDefault(size = 20, sort = "entryDate") Pageable pageable
     ) {
-        var entries = entryService.findByUser(currentUser, pageable);
-        return ResponseEntity.ok(entries.map(EntryResponseDto::from));
+        return ResponseEntity.ok(entryService.findByUser(currentUser, pageable)); // ⭐ Service returns DTO
     }
 
     @GetMapping
@@ -99,8 +86,9 @@ public class FinancialEntryController {
                 LocalDate.now().minusMonths(1),
                 LocalDate.now(),
                 pageable
-        );
-        return ResponseEntity.ok(entries.map(EntryResponseDto::from));
+        ); // ⭐ Service returns DTO
+
+        return ResponseEntity.ok(entries);
     }
 
     // ============================================
@@ -114,9 +102,7 @@ public class FinancialEntryController {
             @AuthenticationPrincipal User currentUser
     ) {
         var command = requestMapper.toUpdateEntryCommand(id, request, currentUser);
-        var entry = entryService.updateEntry(command);
-
-        return ResponseEntity.ok(EntryResponseDto.from(entry));
+        return ResponseEntity.ok(entryService.updateEntry(command)); // ⭐ Service returns DTO
     }
 
     @PatchMapping("/{id}/context")
@@ -126,8 +112,7 @@ public class FinancialEntryController {
             @AuthenticationPrincipal User currentUser
     ) {
         var command = requestMapper.toUpdateEntryContextCommand(id, request, currentUser);
-        var entry = entryService.updateEntryContext(command);
-        return ResponseEntity.ok(EntryResponseDto.from(entry));
+        return ResponseEntity.ok(entryService.updateEntryContext(command)); // ⭐ Service returns DTO
     }
 
     @PatchMapping("/{id}/metadata")
@@ -137,8 +122,7 @@ public class FinancialEntryController {
             @AuthenticationPrincipal User currentUser
     ) {
         var command = requestMapper.toUpdateEntryMetadataCommand(id, request, currentUser);
-        var entry = entryService.updateEntryMetadata(command);
-        return ResponseEntity.ok(EntryResponseDto.from(entry));
+        return ResponseEntity.ok(entryService.updateEntryMetadata(command)); // ⭐ Service returns DTO
     }
 
     @PatchMapping("/{id}/receipt-number")
@@ -148,8 +132,7 @@ public class FinancialEntryController {
             @AuthenticationPrincipal User currentUser
     ) {
         var command = requestMapper.toUpdateReceiptNumberCommand(id, request, currentUser);
-        var entry = entryService.updateReceiptNumber(command);
-        return ResponseEntity.ok(EntryResponseDto.from(entry));
+        return ResponseEntity.ok(entryService.updateReceiptNumber(command)); // ⭐ Service returns DTO
     }
 
     @PatchMapping("/{id}/exchange-rate")
@@ -159,8 +142,7 @@ public class FinancialEntryController {
             @AuthenticationPrincipal User currentUser
     ) {
         var command = requestMapper.toUpdateExchangeRateCommand(id, request, currentUser);
-        var entry = entryService.updateExchangeRate(command);
-        return ResponseEntity.ok(EntryResponseDto.from(entry));
+        return ResponseEntity.ok(entryService.updateExchangeRate(command)); // ⭐ Service returns DTO
     }
 
     // ============================================
@@ -187,8 +169,7 @@ public class FinancialEntryController {
             @PageableDefault(size = 20) Pageable pageable
     ) {
         var criteria = requestMapper.toEntrySearchCriteria(request);
-        var entries = entryService.search(criteria, pageable);
-        return ResponseEntity.ok(entries.map(EntryResponseDto::from));
+        return ResponseEntity.ok(entryService.search(criteria, pageable)); // Already DTO
     }
 
     @GetMapping("/search/text")
@@ -197,17 +178,13 @@ public class FinancialEntryController {
             @PageableDefault(size = 20) Pageable pageable
     ) {
         var criteria = requestMapper.toTextSearchCriteria(request);
-        var entries = entryService.searchByText(criteria, pageable);
-        return ResponseEntity.ok(entries.map(EntryResponseDto::from));
+        return ResponseEntity.ok(entryService.searchByText(criteria, pageable)); // Already DTO
     }
 
     // ============================================
     // ATTACHMENT OPERATIONS
     // ============================================
 
-    /**
-     * Add a single attachment to an entry
-     */
     @PostMapping("/{id}/attachments")
     public ResponseEntity<AttachmentResponseDto> addAttachment(
             @PathVariable UUID id,
@@ -215,15 +192,9 @@ public class FinancialEntryController {
             @AuthenticationPrincipal User currentUser
     ) {
         var attachment = attachmentService.addAttachment(id, file, currentUser);
-
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(attachment);
+        return ResponseEntity.status(HttpStatus.CREATED).body(attachment);
     }
 
-    /**
-     * Add multiple attachments to an entry
-     */
     @PostMapping("/{id}/attachments/bulk")
     public ResponseEntity<List<AttachmentResponseDto>> addAttachments(
             @PathVariable UUID id,
@@ -231,26 +202,14 @@ public class FinancialEntryController {
             @AuthenticationPrincipal User currentUser
     ) {
         var attachments = attachmentService.addAttachments(id, files, currentUser);
-
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(attachments);
+        return ResponseEntity.status(HttpStatus.CREATED).body(attachments);
     }
 
-    /**
-     * Get all attachments for an entry
-     */
     @GetMapping("/{id}/attachments")
-    public ResponseEntity<List<AttachmentResponseDto>> getAttachments(
-            @PathVariable UUID id
-    ) {
-        var attachments = attachmentService.getAttachments(id);
-        return ResponseEntity.ok(attachments);
+    public ResponseEntity<List<AttachmentResponseDto>> getAttachments(@PathVariable UUID id) {
+        return ResponseEntity.ok(attachmentService.getAttachments(id));
     }
 
-    /**
-     * Download an attachment
-     */
     @GetMapping("/{id}/attachments/{attachmentId}/download")
     public ResponseEntity<Resource> downloadAttachment(
             @PathVariable UUID id,
@@ -259,9 +218,6 @@ public class FinancialEntryController {
         return attachmentService.downloadAttachment(id, attachmentId);
     }
 
-    /**
-     * Remove an attachment
-     */
     @DeleteMapping("/{id}/attachments/{attachmentId}")
     public ResponseEntity<Void> removeAttachment(
             @PathVariable UUID id,

@@ -12,6 +12,8 @@ import com.marine.management.modules.finance.infrastructure.TenantMainCategoryRe
 import com.marine.management.modules.finance.infrastructure.TenantWhoSelectionRepository;
 import org.springframework.stereotype.Component;
 
+import java.util.UUID;
+
 /**
  * Factory for creating FinancialEntry domain objects.
  *
@@ -90,7 +92,7 @@ public class FinancialEntryFactory {
      * @param whoId WHO selection ID (nullable)
      * @return TenantWhoSelection or null
      */
-    private TenantWhoSelection resolveTenantWho(Long whoId) {
+    private TenantWhoSelection resolveTenantWho(UUID whoId) {
         if (whoId == null) {
             return null;
         }
@@ -106,7 +108,7 @@ public class FinancialEntryFactory {
      * @param mainCategoryId main category ID (nullable)
      * @return TenantMainCategory or null
      */
-    private TenantMainCategory resolveTenantMainCategory(Long mainCategoryId) {
+    private TenantMainCategory resolveTenantMainCategory(UUID mainCategoryId) {
         if (mainCategoryId == null) {
             return null;
         }

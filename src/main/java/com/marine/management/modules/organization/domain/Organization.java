@@ -1,38 +1,29 @@
 package com.marine.management.modules.organization.domain;
 
+import com.marine.management.shared.domain.BaseAuditedEntity;
 import jakarta.persistence.*;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.Objects;
 
 /**
- * Organization entity representing a yacht/company (tenant).
+ * Organization entity - tenant root.
  *
- * CRITICAL DESIGN:
- * - This is the ROOT entity (NOT tenant-isolated itself)
- * - Does NOT extend BaseTenantEntity
- * - Does NOT have tenant_id column
- * - All other entities reference this via tenant_id
- *
- * Database Constraints:
- * - yacht_name: UNIQUE, NOT NULL
- * - flag_country: NOT NULL (ISO 3166-1 alpha-2)
- * - base_currency: NOT NULL (ISO 4217)
+ * DESIGN DECISIONS:
+ * - Unique yacht_name: Assumes global namespace (one yacht name across all orgs)
+ * - Immutable critical fields: yachtName, flagCountry, baseCurrency (use rename/change methods)
+ * - Subscription guard: isActive() checks expiration
  */
 @Entity
 @Table(
         name = "organizations",
         uniqueConstraints = {
-                @UniqueConstraint(
-                        name = "uq_organizations_yacht_name",
-                        columnNames = "yacht_name"
-                )
+                @UniqueConstraint(name = "uq_organizations_yacht_name", columnNames = "yacht_name")
         },
         indexes = {
-                @Index(name = "idx_organizations_yacht_name", columnList = "yacht_name"),
-                @Index(name = "idx_organizations_active", columnList = "active")
+                @Index(name = "idx_organizations_yacht_name", columnList = "yacht_name")
         }
 )
-public class Organization {
+public class Organization extends BaseAuditedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -45,10 +36,10 @@ public class Organization {
     private String companyName;
 
     @Column(name = "flag_country", nullable = false, length = 2)
-    private String flagCountry;  // ISO 3166-1 alpha-2 (TR, US, GB)
+    private String flagCountry;
 
     @Column(name = "base_currency", nullable = false, length = 3)
-    private String baseCurrency;  // ISO 4217 (EUR, USD, TRY)
+    private String baseCurrency;
 
     @Column(name = "yacht_type", length = 50)
     private String yachtType;
@@ -62,103 +53,91 @@ public class Organization {
     @Column(name = "current_location", length = 200)
     private String currentLocation;
 
-    @Column(name = "subscription_status", nullable = false, length = 20)
-    private String subscriptionStatus = "FREE";
+    @Enumerated(EnumType.STRING)
+    @Column(name = "subscription_status", nullable = false, length = 30)
+    private SubscriptionStatus subscriptionStatus = SubscriptionStatus.TRIAL;
+
+    @Column(name = "subscription_expires_at")
+    private LocalDate subscriptionExpiresAt;
 
     @Column(nullable = false)
     private Boolean active = true;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
-
     protected Organization() {}
 
-    // Private constructor for factory method
     private Organization(
             String yachtName,
             String companyName,
             String flagCountry,
-            String baseCurrency,
-            String subscriptionStatus
+            String baseCurrency
     ) {
-        this.yachtName = Objects.requireNonNull(yachtName, "Yacht name cannot be null");
+        this.yachtName = validateYachtName(yachtName);
         this.companyName = companyName;
-        this.flagCountry = Objects.requireNonNull(flagCountry, "Flag country cannot be null");
-        this.baseCurrency = Objects.requireNonNull(baseCurrency, "Base currency cannot be null");
-        this.subscriptionStatus = subscriptionStatus != null ? subscriptionStatus : "FREE";
+        this.flagCountry = validateCountryCode(flagCountry);
+        this.baseCurrency = validateCurrencyCode(baseCurrency);
+        this.subscriptionStatus = SubscriptionStatus.TRIAL;
+        this.subscriptionExpiresAt = LocalDate.now().plusDays(30);
         this.active = true;
     }
 
-    // ✅ NEW: Factory method for creating organizations
-    /**
-     * Creates a new organization.
-     *
-     * @param yachtName yacht/organization name (unique)
-     * @param companyName company name (optional)
-     * @param flagCountry ISO 3166-1 alpha-2 country code (e.g., "TR", "US")
-     * @param baseCurrency ISO 4217 currency code (e.g., "EUR", "USD")
-     * @param subscriptionStatus subscription tier (e.g., "FREE", "PREMIUM")
-     * @return new Organization instance
-     */
+    @Override
+    public Object getId() {
+        return id;
+    }
+
+    public Long getOrganizationId() {
+        return id;
+    }
+
     public static Organization create(
             String yachtName,
             String companyName,
             String flagCountry,
-            String baseCurrency,
-            String subscriptionStatus
-    ) {
-        Organization org = new Organization(
-                yachtName,
-                companyName,
-                flagCountry,
-                baseCurrency,
-                subscriptionStatus
-        );
-
-        org.validate();
-        return org;
-    }
-
-    // ✅ NEW: Simplified factory for basic organization
-    public static Organization create(
-            String yachtName,
-            String flagCountry,
             String baseCurrency
     ) {
-        return create(yachtName, null, flagCountry, baseCurrency, "FREE");
+        return new Organization(yachtName, companyName, flagCountry, baseCurrency);
     }
 
-    @PrePersist
-    protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
+    public static Organization create(String yachtName, String flagCountry, String baseCurrency) {
+        return new Organization(yachtName, null, flagCountry, baseCurrency);
     }
 
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
-    }
-
-    // ✅ NEW: Validation method
-    private void validate() {
-        if (yachtName == null || yachtName.trim().isEmpty()) {
+    private String validateYachtName(String name) {
+        if (name == null || name.trim().isEmpty()) {
             throw new IllegalArgumentException("Yacht name cannot be empty");
         }
-        if (yachtName.length() > 100) {
+        if (name.length() > 100) {
             throw new IllegalArgumentException("Yacht name cannot exceed 100 characters");
         }
-        if (flagCountry == null || flagCountry.length() != 2) {
-            throw new IllegalArgumentException("Flag country must be 2-character ISO code");
-        }
-        if (baseCurrency == null || baseCurrency.length() != 3) {
-            throw new IllegalArgumentException("Base currency must be 3-character ISO code");
-        }
+        return name.trim();
     }
 
-    // ✅ NEW: Business methods
+    private String validateCountryCode(String code) {
+        if (code == null || code.length() != 2) {
+            throw new IllegalArgumentException("Country code must be 2-character ISO 3166-1 alpha-2");
+        }
+        return code.toUpperCase();
+    }
+
+    private String validateCurrencyCode(String code) {
+        if (code == null || code.length() != 3) {
+            throw new IllegalArgumentException("Currency code must be 3-character ISO 4217");
+        }
+        return code.toUpperCase();
+    }
+
+    public void renameYacht(String newName) {
+        this.yachtName = validateYachtName(newName);
+    }
+
+    public void changeFlagCountry(String newCountry) {
+        this.flagCountry = validateCountryCode(newCountry);
+    }
+
+    public void changeBaseCurrency(String newCurrency) {
+        this.baseCurrency = validateCurrencyCode(newCurrency);
+    }
+
     public void activate() {
         this.active = true;
     }
@@ -167,8 +146,11 @@ public class Organization {
         this.active = false;
     }
 
-    public boolean isActive() {
-        return active != null && active;
+    public boolean isActive(LocalDate today) {
+        if (!active) return false;
+        if (subscriptionStatus == SubscriptionStatus.SUSPENDED) return false;
+        if (subscriptionExpiresAt != null && subscriptionExpiresAt.isBefore(today)) return false;
+        return true;
     }
 
     public void updateDetails(
@@ -185,49 +167,45 @@ public class Organization {
         this.currentLocation = currentLocation;
     }
 
-    public void upgradeSubscription(String newStatus) {
-        this.subscriptionStatus = Objects.requireNonNull(newStatus, "Subscription status cannot be null");
+    public void upgradeSubscription(SubscriptionStatus newStatus, LocalDate expiresAt) {
+        Objects.requireNonNull(newStatus);
+        if (newStatus == SubscriptionStatus.ACTIVE && expiresAt == null) {
+            throw new IllegalArgumentException("Active subscription requires expiration date");
+        }
+        this.subscriptionStatus = newStatus;
+        this.subscriptionExpiresAt = expiresAt;
     }
 
-    // Getters and Setters
-    public Long getId() { return id; }
+    public void suspendSubscription() {
+        this.subscriptionStatus = SubscriptionStatus.SUSPENDED;
+    }
+
     public String getYachtName() { return yachtName; }
-    public void setYachtName(String yachtName) { this.yachtName = yachtName; }
     public String getCompanyName() { return companyName; }
-    public void setCompanyName(String companyName) { this.companyName = companyName; }
     public String getFlagCountry() { return flagCountry; }
-    public void setFlagCountry(String flagCountry) { this.flagCountry = flagCountry; }
     public String getBaseCurrency() { return baseCurrency; }
-    public void setBaseCurrency(String baseCurrency) { this.baseCurrency = baseCurrency; }
     public String getYachtType() { return yachtType; }
-    public void setYachtType(String yachtType) { this.yachtType = yachtType; }
     public Integer getYachtLength() { return yachtLength; }
-    public void setYachtLength(Integer yachtLength) { this.yachtLength = yachtLength; }
     public String getHomeMarina() { return homeMarina; }
-    public void setHomeMarina(String homeMarina) { this.homeMarina = homeMarina; }
     public String getCurrentLocation() { return currentLocation; }
-    public void setCurrentLocation(String currentLocation) { this.currentLocation = currentLocation; }
-    public String getSubscriptionStatus() { return subscriptionStatus; }
-    public void setSubscriptionStatus(String subscriptionStatus) { this.subscriptionStatus = subscriptionStatus; }
-    public Boolean getActive() { return active; }
-    public void setActive(Boolean active) { this.active = active; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public SubscriptionStatus getSubscriptionStatus() { return subscriptionStatus; }
+    public LocalDate getSubscriptionExpiresAt() { return subscriptionExpiresAt; }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof Organization org)) return false;
-        return Objects.equals(id, org.id);
+        if (!(o instanceof Organization other)) return false;
+        return id != null && id.equals(other.id);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id);
+        return getClass().hashCode();
     }
 
     @Override
     public String toString() {
-        return String.format("Organization{id=%d, yachtName='%s'}", id, yachtName);
+        return String.format("Organization{id=%d, yachtName='%s', status=%s}",
+                id, yachtName, subscriptionStatus);
     }
 }

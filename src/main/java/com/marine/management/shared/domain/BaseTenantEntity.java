@@ -30,11 +30,11 @@ public abstract class BaseTenantEntity extends BaseAuditedEntity {
         return tenantId;
     }
 
-    public boolean belongsToTenant(Long tenantId) {
+    public boolean doesNotBelongToTenant(Long tenantId) {
         if (this.tenantId == null) {
             throw new IllegalStateException("Entity not assigned to tenant");
         }
-        return this.tenantId.equals(tenantId);
+        return !this.tenantId.equals(tenantId);
     }
 
     private void validateTenantContext() {
@@ -42,18 +42,18 @@ public abstract class BaseTenantEntity extends BaseAuditedEntity {
         if (currentTenantId == null) {
             throw new IllegalStateException("No tenant context");
         }
-        if (!belongsToTenant(currentTenantId)) {
+        if (doesNotBelongToTenant(currentTenantId)) {
             throw new IllegalStateException("Tenant mismatch");
         }
     }
 
     public void softDelete(User deletedBy) {
         validateTenantContext();
-        super.softDelete(deletedBy.getId());
+        super.softDelete(deletedBy.getUserId());
     }
 
     public void restore(User restoredBy) {
         validateTenantContext();
-        super.restore(restoredBy.getId());
+        super.restore(restoredBy.getUserId());
     }
 }

@@ -4,17 +4,15 @@ import com.marine.management.modules.finance.domain.entity.TenantWhoSelection;
 
 import java.util.UUID;
 
-/**
- * DTO for tenant-enabled WHO selections.
- */
 public record TenantWhoSelectionDto(
-        UUID id,                    // TenantWhoSelection ID
-        Long whoId,                 // Global Who ID
-        String code,                // e.g., "CAPTAIN", "MAIN_ENGINE"
+        UUID id,
+        Long whoId,
+        String code,
         String nameTr,
         String nameEn,
         Boolean technical,
-        Boolean active,             // Tenant-specific active flag
+        Boolean enabled,
+        Integer displayOrder,        // Eklendi (UI'da sıralama için)
         Long suggestedMainCategoryId
 ) {
     public static TenantWhoSelectionDto from(TenantWhoSelection tenantWhoSelection) {
@@ -26,8 +24,9 @@ public record TenantWhoSelectionDto(
                 who.getCode(),
                 who.getNameTr(),
                 who.getNameEn(),
-                who.getTechnical(),
-                tenantWhoSelection.getActive(),
+                who.isTechnical(),
+                tenantWhoSelection.isEnabled(),
+                who.getDisplayOrder(),           // Eklendi
                 who.getSuggestedMainCategoryId()
         );
     }

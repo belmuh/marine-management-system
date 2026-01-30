@@ -14,7 +14,7 @@ public record TenantMainCategoryDto(
         String nameTr,
         String nameEn,
         Boolean technical,
-        Boolean active,             // Tenant-specific active flag
+        Boolean enabled,             // Tenant-specific active flag
         Integer displayOrder,
         String budgetGuidelineMin,
         String budgetGuidelineMax
@@ -28,8 +28,8 @@ public record TenantMainCategoryDto(
                 mainCategory.getCode(),
                 mainCategory.getNameTr(),
                 mainCategory.getNameEn(),
-                mainCategory.getTechnical(),
-                tenantMainCategory.getActive(),
+                mainCategory.isTechnical(),
+                tenantMainCategory.isEnabled(),
                 mainCategory.getDisplayOrder(),
                 mainCategory.getBudgetGuidelineMin(),
                 mainCategory.getBudgetGuidelineMax()

@@ -1,8 +1,10 @@
 package com.marine.management.modules.finance.presentation.dto.controller;
 
+import java.util.UUID;
+
 public record UpdateEntryContextRequest(
-        Long whoId,
-        Long mainCategoryId,
+        UUID whoId,
+        UUID mainCategoryId,
         String recipient,
         String country,
         String city,

@@ -13,7 +13,7 @@ public record MainCategoryDto(
         String code,
         String nameTr,
         String nameEn,
-        Boolean technical,
+        Boolean isTechnical,
         Integer displayOrder,
         String budgetGuidelineMin,
         String budgetGuidelineMax
@@ -24,7 +24,7 @@ public record MainCategoryDto(
                 mainCategory.getCode(),
                 mainCategory.getNameTr(),
                 mainCategory.getNameEn(),
-                mainCategory.getTechnical(),
+                mainCategory.isTechnical(),
                 mainCategory.getDisplayOrder(),
                 mainCategory.getBudgetGuidelineMin(),
                 mainCategory.getBudgetGuidelineMax()

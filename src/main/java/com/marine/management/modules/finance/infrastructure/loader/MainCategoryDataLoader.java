@@ -67,9 +67,9 @@ public class MainCategoryDataLoader implements CommandLineRunner {
 
         logger.info("✅ ISS standard main categories loaded successfully: {} categories", categories.size());
         logger.info("   - Technical categories: {}",
-                categories.stream().filter(MainCategory::getTechnical).count());
+                categories.stream().filter(MainCategory::isTechnical).count());
         logger.info("   - Personal categories: {}",
-                categories.stream().filter(c -> !c.getTechnical()).count());
+                categories.stream().filter(c -> !c.isTechnical()).count());
     }
 
     /**

@@ -12,7 +12,7 @@ public record CategoryWithUsageDto(
         String name,
         String description,
         RecordType categoryType,
-        boolean isActive,
+        boolean active,
         Integer displayOrder,
         Long usageCount
 ) {

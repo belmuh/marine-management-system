@@ -233,7 +233,7 @@ public class FinancialCategoryService {
         guardTenantContext();
 
         // Auto tenant-filtered
-        return categoryRepository.findByIsActiveTrueOrderByDisplayOrderAsc();
+        return categoryRepository.findByEnabledTrueOrderByDisplayOrderAsc();
     }
 
     /**

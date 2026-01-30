@@ -1,9 +1,12 @@
+// modules/users/domain/User.java
 package com.marine.management.modules.users.domain;
 
 import com.marine.management.modules.organization.domain.Organization;
+import com.marine.management.shared.domain.BaseAuditedEntity;
 import com.marine.management.shared.security.Role;
 import com.marine.management.shared.security.TenantAwareUserDetails;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Email;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -15,43 +18,31 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
-/**
- * User entity implementing Spring Security UserDetails.
- *
- * WHY UserDetails?
- * - Standard Spring Security interface
- * - Clean integration with authentication system
- * - No need for separate UserDetailsService adapter
- * - Domain entity carries its own security context
- */
 @Entity
 @Table(
         name = "users",
         uniqueConstraints = {
-                @UniqueConstraint(name = "uq_users_username", columnNames = "username"),
                 @UniqueConstraint(name = "uq_users_email", columnNames = "email")
         },
         indexes = {
-                @Index(name = "idx_users_username", columnList = "username"),
                 @Index(name = "idx_users_email", columnList = "email"),
                 @Index(name = "idx_users_organization", columnList = "organization_id")
         }
 )
-public class User implements UserDetails, TenantAwareUserDetails {
+public class User extends BaseAuditedEntity implements UserDetails, TenantAwareUserDetails {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(columnDefinition = "UUID", updatable = false, nullable = false)
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "organization_id", nullable = false, updatable = false)
     private Organization organization;
 
-    @Column(unique = true, nullable = false, length = 50)
-    private String username;
-
+    // ⭐ SINGLE SOURCE OF TRUTH: email
     @Column(unique = true, nullable = false, length = 100)
+    @Email
     private String email;
 
     @Column(name = "first_name", length = 50)
@@ -60,7 +51,7 @@ public class User implements UserDetails, TenantAwareUserDetails {
     @Column(name = "last_name", length = 50)
     private String lastName;
 
-    @Column(nullable = false)
+    @Column(name = "password_hash", nullable = false)
     private String password;
 
     @Enumerated(EnumType.STRING)
@@ -70,56 +61,50 @@ public class User implements UserDetails, TenantAwareUserDetails {
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
-
+    @Column(name = "last_login_at")
+    private LocalDateTime lastLoginAt;
 
     protected User() {}
 
-    private User(String username, String email, String password, Role role, Organization organization) {
-        this.username = validateUsername(username);
+    private User(String email, String password, Role role, Organization organization) {
         this.email = validateEmail(email);
         this.password = Objects.requireNonNull(password, "Password cannot be null");
         this.role = role;
         this.organization = Objects.requireNonNull(organization, "Organization cannot be null");
     }
 
-    @PrePersist
-    protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
+    // ⭐ FACTORY METHODS
+    public static User create(String email, String plainPassword, Organization organization) {
+        return new User(email, plainPassword, Role.USER, organization);
     }
 
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
+    public static User createWithRole(String email, String plainPassword, Role role, Organization organization) {
+        return new User(email, plainPassword, role, organization);
     }
 
-    // === FACTORY METHODS ===
-
-    public static User create(String username, String email, String plainPassword, Organization organization) {
-        return new User(username, email, plainPassword, Role.USER, organization);
+    public static User createWithHashedPassword(
+            String email,
+            String firstName,
+            String lastName,
+            String hashedPassword,
+            Role role,
+            Organization organization
+    ) {
+        User user = new User(email, hashedPassword, role, organization);
+        user.firstName = firstName;
+        user.lastName = lastName;
+        return user;
     }
 
-    public static User createWithRole(String username, String email, String plainPassword, Role role, Organization organization) {
-        return new User(username, email, plainPassword, role, organization);
+    // Called on successful login
+    public void updateLastLogin(LocalDateTime loginTime) {
+        this.lastLoginAt = loginTime;
     }
 
-    public static User createWithHashedPassword(String username, String email, String hashedPassword, Role role, Organization organization) {
-        return new User(username, email, hashedPassword, role, organization);
-    }
-
-    // === UserDetails IMPLEMENTATION ===
-
+    // UserDetails implementation - email is username for Spring Security
     @Override
-    public Collection<? extends GrantedAuthority> getAuthorities() {
-        // Return role as authority
-        // Spring Security expects "ROLE_" prefix for hasRole() checks
-        // But we use hasAuthority() so no prefix needed
-        return List.of(new SimpleGrantedAuthority(role.name()));
+    public String getUsername() {
+        return email;  // Spring Security uses this for authentication
     }
 
     @Override
@@ -127,24 +112,28 @@ public class User implements UserDetails, TenantAwareUserDetails {
         return password;
     }
 
+    public LocalDateTime getLastLoginAt() {
+        return lastLoginAt;
+    }
+
     @Override
-    public String getUsername() {
-        return username;
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return List.of(new SimpleGrantedAuthority(role.name()));
     }
 
     @Override
     public boolean isAccountNonExpired() {
-        return true;  // We don't track account expiration
+        return true;
     }
 
     @Override
     public boolean isAccountNonLocked() {
-        return isActive;  // Locked = !isActive
+        return isActive;
     }
 
     @Override
     public boolean isCredentialsNonExpired() {
-        return true;  // We don't track credential expiration
+        return true;
     }
 
     @Override
@@ -152,7 +141,26 @@ public class User implements UserDetails, TenantAwareUserDetails {
         return isActive;
     }
 
-    // === BUSINESS METHODS ===
+    // ⭐ TenantAwareUserDetails implementation
+    @Override
+    public Long getTenantId() {
+        return getOrganizationId();
+    }
+
+    @Override
+    public String getRole() {
+        return role.name();
+    }
+
+    @Override
+    public Object getId() {
+        return id;
+    }
+
+    // ⭐ BUSINESS METHODS
+    public UUID getUserId() {
+        return id;
+    }
 
     public boolean isActive() {
         return isActive;
@@ -202,9 +210,10 @@ public class User implements UserDetails, TenantAwareUserDetails {
         return encoder.matches(inputPassword, this.password);
     }
 
-    public void updateProfile(String newUsername, String newEmail) {
-        this.username = validateUsername(newUsername);
+    public void updateProfile(String newEmail, String newFirstName, String newLastName) {
         this.email = validateEmail(newEmail);
+        this.firstName = newFirstName;
+        this.lastName = newLastName;
     }
 
     public void changePassword(String newPassword) {
@@ -215,21 +224,7 @@ public class User implements UserDetails, TenantAwareUserDetails {
         this.role = Objects.requireNonNull(newRole, "Role cannot be null");
     }
 
-    // === VALIDATION ===
-
-    private String validateUsername(String username) {
-        if (username == null || username.trim().isEmpty()) {
-            throw new IllegalArgumentException("Username cannot be null or empty");
-        }
-        if (username.length() < 3 || username.length() > 50) {
-            throw new IllegalArgumentException("Username must be between 3 and 50 characters");
-        }
-        if (!username.matches("^[a-zA-Z0-9_]+$")) {
-            throw new IllegalArgumentException("Username can only contain letters, numbers and underscores");
-        }
-        return username.trim();
-    }
-
+    // ⭐ VALIDATION
     private String validateEmail(String email) {
         if (email == null || email.trim().isEmpty()) {
             throw new IllegalArgumentException("Email cannot be null or empty");
@@ -240,41 +235,40 @@ public class User implements UserDetails, TenantAwareUserDetails {
         return email.trim().toLowerCase();
     }
 
-    // === GETTERS ===
+    // ⭐ GETTERS
+    public Organization getOrganization() {
+        return organization;
+    }
 
-    public UUID getId() { return id; }
-    public Organization getOrganization() { return organization; }
     public Long getOrganizationId() {
-        return organization != null ? organization.getId() : null;
-    }
-    // getUsername() from UserDetails
-    public String getEmail() { return email; }
-    @Override
-    public Long getTenantId() {
-        return getOrganizationId();
+        return organization != null ? organization.getOrganizationId() : null;
     }
 
-    @Override
-    public String getRole() {
-        return role.name();
+    public String getEmail() {
+        return email;
     }
 
-    // isActive() as isEnabled() from UserDetails
-    public String getFirstName() { return firstName; }
-    public String getLastName() { return lastName; }
+    public String getFirstName() {
+        return firstName;
+    }
+
+    public String getLastName() {
+        return lastName;
+    }
 
     public String getFullName() {
-        if (firstName == null && lastName == null) return username;
+        if (firstName == null && lastName == null) return email;
         if (firstName != null && lastName != null) return firstName + " " + lastName;
         return firstName != null ? firstName : lastName;
     }
 
-    // getPassword() from UserDetails
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public void setFirstName(String firstName) {
+        this.firstName = firstName;
+    }
 
-    public void setFirstName(String firstName) { this.firstName = firstName; }
-    public void setLastName(String lastName) { this.lastName = lastName; }
+    public void setLastName(String lastName) {
+        this.lastName = lastName;
+    }
 
     @Override
     public boolean equals(Object o) {
@@ -290,7 +284,7 @@ public class User implements UserDetails, TenantAwareUserDetails {
 
     @Override
     public String toString() {
-        return String.format("User{id=%s, username='%s', email='%s', role=%s}",
-                id, username, email, role);
+        return String.format("User{id=%s, email='%s', role=%s}",
+                id, email, role);
     }
 }
