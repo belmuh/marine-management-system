@@ -46,3 +46,4 @@ application-dev.properties
 ### VS Code ###
 .vscode/
 src/main/resources/application.properties
+dev-uploads/
