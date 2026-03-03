@@ -1,6 +1,6 @@
 package com.marine.management.modules.finance.infrastructure.loader;
 
-import com.marine.management.modules.finance.domain.entity.Who;
+import com.marine.management.modules.finance.domain.entities.Who;
 import com.marine.management.modules.finance.infrastructure.WhoRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,7 +76,7 @@ public class WhoDataLoader implements CommandLineRunner {
         long technicalCount = whoList.stream().filter(Who::isTechnical).count();
         long personalCount = whoList.stream().filter(w -> !w.isTechnical()).count();
 
-        logger.info("✅ ISS standard who list loaded successfully: {} entries", whoList.size());
+        logger.info(" ISS standard who list loaded successfully: {} entries", whoList.size());
         logger.info("   - Technical WHO: {}", technicalCount);
         logger.info("   - Personal WHO: {}", personalCount);
     }
@@ -84,7 +84,7 @@ public class WhoDataLoader implements CommandLineRunner {
     /**
      * Creates a Who entry using factory method.
      *
-     * ✅ FIXED: Uses Who.create() instead of new Who()
+     *  FIXED: Uses Who.create() instead of new Who()
      */
     private Who createWho(
             String code,

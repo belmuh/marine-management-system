@@ -17,6 +17,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -26,22 +27,19 @@ public class ReportController {
 
     private final GenerateAnnualReportUseCase generateAnnualReportUseCase;
     private final GeneratePeriodReportUseCase generatePeriodReportUseCase;
-    private final GenerateTreeReportUseCase generateTreeReportUseCase;        // ✅ Yeni
-    private final GeneratePivotTreeUseCase generatePivotTreeUseCase;          // ✅ Yeni
-    private final FinancialReportService financialReportService;
+    private final GenerateTreeReportUseCase generateTreeReportUseCase;        //  Yeni
+    private final GeneratePivotTreeUseCase generatePivotTreeUseCase;
 
     public ReportController(
             GenerateAnnualReportUseCase generateAnnualReportUseCase,
             GeneratePeriodReportUseCase generatePeriodReportUseCase,
-            GenerateTreeReportUseCase generateTreeReportUseCase,              // ✅ Yeni
-            GeneratePivotTreeUseCase generatePivotTreeUseCase,                // ✅ Yeni
-            FinancialReportService financialReportService
+            GenerateTreeReportUseCase generateTreeReportUseCase,              //  Yeni
+            GeneratePivotTreeUseCase generatePivotTreeUseCase
     ) {
         this.generateAnnualReportUseCase = generateAnnualReportUseCase;
         this.generatePeriodReportUseCase = generatePeriodReportUseCase;
-        this.generateTreeReportUseCase = generateTreeReportUseCase;          // ✅ Yeni
-        this.generatePivotTreeUseCase = generatePivotTreeUseCase;            // ✅ Yeni
-        this.financialReportService = financialReportService;
+        this.generateTreeReportUseCase = generateTreeReportUseCase;          //  Yeni
+        this.generatePivotTreeUseCase = generatePivotTreeUseCase;
     }
 
 
@@ -64,62 +62,6 @@ public class ReportController {
         return ResponseEntity.ok(breakdown);
     }
 
-    // ============================================
-    // DASHBOARD REPORTS
-    // ============================================
-
-    @GetMapping("/dashboard/summary")
-    public ResponseEntity<DashboardSummary> getDashboardSummary(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
-    ) {
-        LocalDate start = startDate != null ? startDate : LocalDate.now().minusMonths(1);
-        LocalDate end = endDate != null ? endDate : LocalDate.now();
-
-        DashboardSummary summary = financialReportService.getDashboardSummary(start, end);
-        return ResponseEntity.ok(summary);
-    }
-
-    @GetMapping("/dashboard/period-totals")
-    public ResponseEntity<List<FinancialEntryReportRepository.PeriodTotalProjection>> getPeriodTotals(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
-    ) {
-        return ResponseEntity.ok(financialReportService.getPeriodTotals(startDate, endDate));
-    }
-
-    @GetMapping("/dashboard/category-totals")
-    public ResponseEntity<List<FinancialEntryReportRepository.CategoryTotalProjection>> getCategoryTotals(
-            @RequestParam RecordType entryType,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
-    ) {
-        return ResponseEntity.ok(financialReportService.getCategoryTotals(entryType, startDate, endDate));
-    }
-
-    @GetMapping("/dashboard/expense-totals")
-    public ResponseEntity<List<FinancialEntryReportRepository.CategoryTotalProjection>> getExpenseTotals(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
-    ) {
-        return ResponseEntity.ok(financialReportService.getExpenseTotals(startDate, endDate));
-    }
-
-    @GetMapping("/dashboard/income-totals")
-    public ResponseEntity<List<FinancialEntryReportRepository.CategoryTotalProjection>> getIncomeTotals(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
-    ) {
-        return ResponseEntity.ok(financialReportService.getIncomeTotals(startDate, endDate));
-    }
-
-    @GetMapping("/dashboard/monthly-totals")
-    public ResponseEntity<List<FinancialEntryReportRepository.MonthlyTotalProjection>> getMonthlyTotals(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
-    ) {
-        return ResponseEntity.ok(financialReportService.getMonthlyTotals(startDate, endDate));
-    }
 
     // ============================================
     // TREE REPORTS

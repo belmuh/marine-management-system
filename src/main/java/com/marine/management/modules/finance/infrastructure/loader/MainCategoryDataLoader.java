@@ -1,6 +1,6 @@
 package com.marine.management.modules.finance.infrastructure.loader;
 
-import com.marine.management.modules.finance.domain.entity.MainCategory;
+import com.marine.management.modules.finance.domain.entities.MainCategory;
 import com.marine.management.modules.finance.infrastructure.MainCategoryRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,7 +65,7 @@ public class MainCategoryDataLoader implements CommandLineRunner {
             DataLoaderSharedData.addMainCategory(category.getCode(), category.getId());
         });
 
-        logger.info("✅ ISS standard main categories loaded successfully: {} categories", categories.size());
+        logger.info(" ISS standard main categories loaded successfully: {} categories", categories.size());
         logger.info("   - Technical categories: {}",
                 categories.stream().filter(MainCategory::isTechnical).count());
         logger.info("   - Personal categories: {}",

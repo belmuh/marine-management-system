@@ -56,4 +56,5 @@ public abstract class BaseTenantEntity extends BaseAuditedEntity {
         validateTenantContext();
         super.restore(restoredBy.getUserId());
     }
+
 }

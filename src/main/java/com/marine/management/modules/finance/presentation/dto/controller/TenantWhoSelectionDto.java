@@ -1,6 +1,6 @@
 package com.marine.management.modules.finance.presentation.dto.controller;
 
-import com.marine.management.modules.finance.domain.entity.TenantWhoSelection;
+import com.marine.management.modules.finance.domain.entities.TenantWhoSelection;
 
 import java.util.UUID;
 

@@ -312,11 +312,11 @@ Content-Type: application/json
 
 | Feature | ADMIN | MANAGER | CAPTAIN | USER |
 |---------|-------|---------|---------|------|
-| User Management | ✅ | ✅ | ❌ | ❌ |
-| Category Management | ✅ | ✅ | ❌ | ❌ |
-| Financial Entries | ✅ | ✅ | ✅ | 👁️ View Only |
-| Reports | ✅ | ✅ | ✅ | ❌ |
-| Attachments | ✅ | ✅ | ✅ | ❌ |
+| User Management |  |  | ❌ | ❌ |
+| Category Management |  |  | ❌ | ❌ |
+| Financial Entries |  |  |  | 👁️ View Only |
+| Reports |  |  |  | ❌ |
+| Attachments |  |  |  | ❌ |
 
 ### Endpoint Security
 ```java
@@ -516,12 +516,12 @@ Operational | 5k  | 6k  | 7k  | ... | 80k
 ## 🔄 Version History
 
 ### v1.0.0 (Current)
-- ✅ User authentication & JWT
-- ✅ Financial entry management
-- ✅ Tree & Pivot reports
-- ✅ Attachment system
-- ✅ Multi-currency support
-- ✅ Role-based access control
+-  User authentication & JWT
+-  Financial entry management
+-  Tree & Pivot reports
+-  Attachment system
+-  Multi-currency support
+-  Role-based access control
 
 ### Upcoming (v1.1.0)
 - [ ] Budget planning & forecasting

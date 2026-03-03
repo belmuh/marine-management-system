@@ -1,6 +1,6 @@
 package com.marine.management.modules.finance.presentation.dto.controller;
 
-import com.marine.management.modules.finance.domain.entity.Who;
+import com.marine.management.modules.finance.domain.entities.Who;
 
 /**
  * DTO for Who entity (global reference data).

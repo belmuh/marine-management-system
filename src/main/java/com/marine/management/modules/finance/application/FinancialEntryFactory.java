@@ -1,10 +1,10 @@
 package com.marine.management.modules.finance.application;
 
 import com.marine.management.modules.finance.application.commands.CreateEntryCommand;
-import com.marine.management.modules.finance.domain.entity.FinancialCategory;
-import com.marine.management.modules.finance.domain.entity.FinancialEntry;
-import com.marine.management.modules.finance.domain.entity.TenantMainCategory;
-import com.marine.management.modules.finance.domain.entity.TenantWhoSelection;
+import com.marine.management.modules.finance.domain.entities.FinancialCategory;
+import com.marine.management.modules.finance.domain.entities.FinancialEntry;
+import com.marine.management.modules.finance.domain.entities.TenantMainCategory;
+import com.marine.management.modules.finance.domain.entities.TenantWhoSelection;
 import com.marine.management.modules.finance.domain.vo.EntryNumber;
 import com.marine.management.modules.finance.infrastructure.FinancialCategoryRepository;
 import com.marine.management.modules.finance.infrastructure.FinancialEntryRepository;
@@ -75,7 +75,6 @@ public class FinancialEntryFactory {
                 command.entryDate(),
                 command.paymentMethod(),
                 command.description(),
-                command.creator(),
                 tenantWho,
                 tenantMainCategory,
                 command.recipient(),

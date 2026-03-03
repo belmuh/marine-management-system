@@ -1,6 +1,6 @@
 package com.marine.management.modules.finance.presentation.dto;
 
-import com.marine.management.modules.finance.domain.entity.FinancialCategory;
+import com.marine.management.modules.finance.domain.entities.FinancialCategory;
 import com.marine.management.modules.finance.domain.enums.RecordType;
 
 import java.util.UUID;

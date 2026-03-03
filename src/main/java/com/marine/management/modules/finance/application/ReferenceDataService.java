@@ -1,7 +1,7 @@
 package com.marine.management.modules.finance.application;
 
-import com.marine.management.modules.finance.domain.entity.TenantMainCategory;
-import com.marine.management.modules.finance.domain.entity.TenantWhoSelection;
+import com.marine.management.modules.finance.domain.entities.TenantMainCategory;
+import com.marine.management.modules.finance.domain.entities.TenantWhoSelection;
 import com.marine.management.modules.finance.infrastructure.TenantMainCategoryRepository;
 import com.marine.management.modules.finance.infrastructure.TenantWhoSelectionRepository;
 import com.marine.management.modules.finance.presentation.dto.controller.TenantMainCategoryDto;

@@ -1,6 +1,6 @@
 package com.marine.management.modules.finance.infrastructure;
 
-import com.marine.management.modules.finance.domain.entity.FinancialCategory;
+import com.marine.management.modules.finance.domain.entities.FinancialCategory;
 import com.marine.management.modules.finance.domain.enums.RecordType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;

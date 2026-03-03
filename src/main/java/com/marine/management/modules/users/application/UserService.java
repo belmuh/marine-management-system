@@ -127,7 +127,7 @@ public class UserService {
                 firstName,
                 lastName,
                 plainPassword,
-                Role.USER,
+                Role.CREW,
                 organization
         );
     }

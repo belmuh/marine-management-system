@@ -1,6 +1,6 @@
 package com.marine.management.modules.finance.application;
 
-import com.marine.management.modules.finance.domain.entity.FinancialCategory;
+import com.marine.management.modules.finance.domain.entities.FinancialCategory;
 import com.marine.management.modules.finance.domain.enums.RecordType;
 import com.marine.management.modules.finance.infrastructure.FinancialCategoryRepository;
 import com.marine.management.shared.exceptions.CategoryNotFoundException;

@@ -11,6 +11,10 @@ public record EntrySearchRequest(
         Long whoId,
         Long mainCategoryId,
         LocalDate startDate,
-        LocalDate endDate
-) {
-}
+        LocalDate endDate,
+        String searchTerm,
+        String sortColumn,
+        String sortDirection,
+        Integer page,
+        Integer size
+) {}

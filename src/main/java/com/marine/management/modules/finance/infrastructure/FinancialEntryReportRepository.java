@@ -1,7 +1,7 @@
 package com.marine.management.modules.finance.infrastructure;
 
 import com.marine.management.modules.finance.domain.enums.RecordType;
-import com.marine.management.modules.finance.domain.entity.FinancialEntry;
+import com.marine.management.modules.finance.domain.entities.FinancialEntry;
 import com.marine.management.modules.finance.domain.model.PivotReportProjection;
 import com.marine.management.modules.finance.domain.model.TreeReportProjection;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -300,6 +300,12 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
     // ============================================
     // PROJECTION INTERFACES (Dashboard için basit interface projections)
     // ============================================
+    public interface CumulativeBalanceProjection {
+        String getMonth(); // "2025-08"
+        BigDecimal getIncome();
+        BigDecimal getExpense();
+        BigDecimal getCumulativeBalance();
+    }
 
     interface PeriodTotalProjection {
         RecordType getEntryType();

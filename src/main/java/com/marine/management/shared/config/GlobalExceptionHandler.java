@@ -1,5 +1,7 @@
 package com.marine.management.shared.config;
 
+import com.marine.management.modules.finance.domain.exceptions.EntryValidationException;
+import com.marine.management.modules.finance.domain.exceptions.UnauthorizedActionException;
 import com.marine.management.shared.exceptions.*;
 import com.marine.management.shared.presentation.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -12,6 +14,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
+
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -41,19 +45,23 @@ public class GlobalExceptionHandler {
                 ));
     }
 
+    /**
+     * JPA lifecycle validation failures (IllegalStateException from @PrePersist/@PreUpdate)
+     */
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ErrorResponse> handleIllegalState(
             IllegalStateException ex,
             HttpServletRequest request) {
         String errorId = UUID.randomUUID().toString();
-        logger.warn("Validation error [ID: {}] at {}: {}", errorId, request.getRequestURI(), ex.getMessage());
+        logger.warn("Validation error [ID: {}] at {}: {}",
+                errorId, request.getRequestURI(), ex.getMessage());
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ErrorResponse(
-                        "Validation Error",    // error
-                        ex.getMessage(),       // message
-                        "VALIDATION_ERROR",    // code
-                        errorId                // errorId
+                        "Validation Error",
+                        ex.getMessage(),
+                        "VALIDATION_ERROR",
+                        errorId
                 ));
     }
 
@@ -162,4 +170,61 @@ public class GlobalExceptionHandler {
                         errorId                             // errorId
                 ));
     }
+
+
+    /**
+     * Domain authorization exceptions
+     */
+    @ExceptionHandler(UnauthorizedActionException.class)
+    public ResponseEntity<ErrorResponse> handleUnauthorizedAction(
+            UnauthorizedActionException ex,
+            HttpServletRequest request) {
+        String errorId = UUID.randomUUID().toString();
+        logger.warn("Unauthorized Action [ID: {}] at {}: {}",
+                errorId, request.getRequestURI(), ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ErrorResponse(
+                        "Unauthorized Action",
+                        ex.getMessage(),
+                        "UNAUTHORIZED_ACTION",
+                        errorId
+                ));
+    }
+
+    /**
+     * Domain validation exceptions (field-level errors)
+     */
+    @ExceptionHandler(EntryValidationException.class)
+    public ResponseEntity<ValidationErrorResponse> handleEntryValidation(
+            EntryValidationException ex,
+            HttpServletRequest request) {
+        String errorId = UUID.randomUUID().toString();
+        logger.warn("Entry Validation Failed [ID: {}] at {}: {}",
+                errorId, request.getRequestURI(), ex.getMessage());
+
+        return ResponseEntity.badRequest()
+                .body(new ValidationErrorResponse(
+                        "Validation Failed",
+                        ex.getMessage(),
+                        ex.getErrors().stream()
+                                .collect(Collectors.toMap(
+                                        EntryValidationException.ValidationError::field,
+                                        EntryValidationException.ValidationError::message
+                                )),
+                        "ENTRY_VALIDATION_ERROR",
+                        errorId
+                ));
+    }
+
+    //  ValidationErrorResponse - Nested class (ErrorResponse'dan ayrı)
+    public record ValidationErrorResponse(
+            String error,
+            String message,
+            Map<String, String> fieldErrors,
+            String code,
+            String errorId
+    ) {}
+
+
 }

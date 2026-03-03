@@ -1,6 +1,6 @@
 package com.marine.management.modules.finance.presentation.dto;
 
-import com.marine.management.modules.finance.domain.entity.FinancialEntryAttachment;
+import com.marine.management.modules.finance.domain.entities.FinancialEntryAttachment;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.time.LocalDateTime;

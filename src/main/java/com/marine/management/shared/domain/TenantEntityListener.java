@@ -64,7 +64,7 @@ public class TenantEntityListener {
             throw new IllegalStateException(
                     "Cannot update tenant entity without active tenant context. " +
                             "Entity: " + entity.getClass().getSimpleName() +
-                            ", ID: " + tenantEntity.getId() + ". " +  // ✅ getId() çalışır (abstract method)
+                            ", ID: " + tenantEntity.getId() + ". " +  //  getId() çalışır (abstract method)
                             "This is a critical security violation - tenant isolation would be compromised."
             );
         }
@@ -75,7 +75,7 @@ public class TenantEntityListener {
         if (entityTenantId == null) {
             log.error("SECURITY VIOLATION: Tenant ID is null on update. Entity: {}, ID: {}",
                     entity.getClass().getSimpleName(),
-                    tenantEntity.getId());  // ✅ getId() çalışır
+                    tenantEntity.getId());  //  getId() çalışır
             throw new IllegalStateException(
                     "Tenant ID cannot be null during update. " +
                             "Entity: " + entity.getClass().getSimpleName() +
@@ -87,7 +87,7 @@ public class TenantEntityListener {
             log.error("SECURITY VIOLATION: Attempt to change tenant_id or access wrong tenant's data. " +
                             "Entity: {}, ID: {}, Current Tenant: {}, Entity Tenant: {}",
                     entity.getClass().getSimpleName(),
-                    tenantEntity.getId(),  // ✅ getId() çalışır (UUID veya Long döner)
+                    tenantEntity.getId(),  //  getId() çalışır (UUID veya Long döner)
                     currentTenantId,
                     entityTenantId);
             throw new IllegalStateException(

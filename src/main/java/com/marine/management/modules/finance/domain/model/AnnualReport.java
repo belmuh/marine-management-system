@@ -5,53 +5,81 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Annual financial report with monthly breakdown
+ * Annual financial report with monthly breakdown.
+ *
+ * <p>Immutable domain model representing a full year's financial data
+ * grouped by category with monthly totals.
+ *
+ * @param year Report year
+ * @param currency Currency code (e.g., EUR, USD)
+ * @param monthlyTotals Monthly income/expense/cumulative totals (1-12)
+ * @param categoryBreakdowns Category-wise yearly summaries
  */
-public class AnnualReport {
-    private final int year;
-    private final String currency;
-    private final Map<Integer, MonthlyTotal> monthlyTotals;
-    private final List<CategoryYearSummary> categoryBreakdowns;
-    private final BigDecimal grandTotal;       // ⭐ ekledik
-    private final BigDecimal remainingMoney;   // ⭐ ekledik
-
-    public AnnualReport(
-            int year,
-            String currency,
-            Map<Integer, MonthlyTotal> monthlyTotals,
-            List<CategoryYearSummary> categoryBreakdowns,
-            BigDecimal grandTotal,
-            BigDecimal remainingMoney
-    ) {
-        this.year = year;
-        this.currency = currency;
-        this.monthlyTotals = Map.copyOf(monthlyTotals);
-        this.categoryBreakdowns = List.copyOf(categoryBreakdowns);
-        this.grandTotal = grandTotal;
-        this.remainingMoney = remainingMoney;
+public record AnnualReport(
+        int year,
+        String currency,
+        Map<Integer, MonthlyTotal> monthlyTotals,
+        List<CategoryYearSummary> categoryBreakdowns
+) {
+    /**
+     * Compact constructor ensuring immutability.
+     */
+    public AnnualReport {
+        monthlyTotals = Map.copyOf(monthlyTotals);
+        categoryBreakdowns = List.copyOf(categoryBreakdowns);
     }
 
+    /**
+     * Calculates total income for the year.
+     *
+     * @return Sum of all monthly income
+     */
     public BigDecimal getTotalIncome() {
         return monthlyTotals.values().stream()
                 .map(MonthlyTotal::income)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    /**
+     * Calculates total expense for the year.
+     *
+     * @return Sum of all monthly expenses (grand total)
+     */
     public BigDecimal getTotalExpense() {
         return monthlyTotals.values().stream()
                 .map(MonthlyTotal::expense)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    /**
+     * Calculates net balance for the year.
+     *
+     * @return Total income minus total expense
+     */
     public BigDecimal getNetBalance() {
         return getTotalIncome().subtract(getTotalExpense());
     }
 
-    // ⭐ Getterlar
-    public int getYear() { return year; }
-    public String getCurrency() { return currency; }
-    public Map<Integer, MonthlyTotal> getMonthlyTotals() { return monthlyTotals; }
-    public List<CategoryYearSummary> getCategoryBreakdowns() { return categoryBreakdowns; }
-    public BigDecimal getGrandTotal() { return grandTotal; }
-    public BigDecimal getRemainingMoney() { return remainingMoney; }
+    /**
+     * Gets the grand total (total expenses).
+     *
+     * Alias for getTotalExpense() for backward compatibility.
+     *
+     * @return Total expenses for the year
+     */
+    public BigDecimal getGrandTotal() {
+        return getTotalExpense();
+    }
+
+    /**
+     * Gets the remaining money at year end.
+     *
+     * Returns the cumulative balance from December (month 12).
+     *
+     * @return Year-end cumulative balance
+     */
+    public BigDecimal getRemainingMoney() {
+        MonthlyTotal december = monthlyTotals.get(12);
+        return december != null ? december.cumulative() : BigDecimal.ZERO;
+    }
 }

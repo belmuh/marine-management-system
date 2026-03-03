@@ -25,7 +25,7 @@ import java.util.function.Function;
 @Component
 public class JwtUtil {
 
-    // ✅ Constants for claim names
+    //  Constants for claim names
     public static final String CLAIM_TENANT_ID = "tenantId";
     public static final String CLAIM_ROLE = "role";
 
@@ -39,7 +39,7 @@ public class JwtUtil {
     private long refreshExpirationMs;
 
     private SecretKey getSigningKey() {
-        return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));  // ✅ Explicit charset
+        return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));  //  Explicit charset
     }
 
     /**
@@ -53,7 +53,7 @@ public class JwtUtil {
     public String generateToken(UserDetails userDetails) {
         Map<String, Object> claims = new HashMap<>();
 
-        // ✅ Polymorphic tenant-aware support
+        //  Polymorphic tenant-aware support
         if (userDetails instanceof TenantAwareUserDetails tenantUser) {
             claims.put(CLAIM_TENANT_ID, tenantUser.getTenantId());
             claims.put(CLAIM_ROLE, tenantUser.getRole());
@@ -78,7 +78,7 @@ public class JwtUtil {
      */
     public Long extractTenantId(String token) {
         Claims claims = extractAllClaims(token);
-        Object tenantId = claims.get(CLAIM_TENANT_ID);  // ✅ Use constant
+        Object tenantId = claims.get(CLAIM_TENANT_ID);  //  Use constant
 
         if (tenantId == null) {
             return null;

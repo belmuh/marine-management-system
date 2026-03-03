@@ -1,6 +1,6 @@
 package com.marine.management.modules.finance.infrastructure;
 
-import com.marine.management.modules.finance.domain.entity.MainCategory;
+import com.marine.management.modules.finance.domain.entities.MainCategory;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

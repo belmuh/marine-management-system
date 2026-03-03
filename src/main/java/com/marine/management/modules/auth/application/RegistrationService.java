@@ -91,6 +91,10 @@ public class RegistrationService {
         );
         organization = organizationRepository.save(organization);
 
+        //  Set tenant context for reference data initialization
+        Long tenantId = organization.getOrganizationId();
+        TenantContext.setCurrentTenantId(tenantId);
+
         logger.info(" Created organization with ID: {}", organization.getOrganizationId());
 
         // ============================================
@@ -117,11 +121,10 @@ public class RegistrationService {
         // ============================================
         // INITIALIZE TENANT REFERENCE DATA
         // ============================================
-
-        //  Set tenant context for reference data initialization
-        TenantContext.setCurrentTenantId(organization.getOrganizationId());
+        logger.info(" TEST TEST TEST Initialized reference data for tenant: {}", organization.getOrganizationId());
 
         try {
+
             // Initialize tenant-specific reference data (MainCategory, WHO data, etc.)
             tenantReferenceDataInitializer.initializeTenantReferenceData();
 

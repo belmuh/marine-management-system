@@ -1,21 +1,7 @@
 package com.marine.management.modules.files;
 
-import com.marine.management.modules.finance.domain.entity.FinancialCategory;
-import com.marine.management.modules.finance.domain.entity.FinancialEntry;
-import com.marine.management.modules.finance.domain.enums.PaymentMethod;
-import com.marine.management.modules.finance.domain.enums.RecordType;
-import com.marine.management.modules.finance.domain.vo.EntryNumber;
-import com.marine.management.modules.finance.domain.vo.Money;
-import com.marine.management.modules.finance.infrastructure.FinancialCategoryRepository;
-import com.marine.management.modules.finance.infrastructure.FinancialEntryRepository;
-import com.marine.management.modules.users.domain.User;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
-
-import java.io.IOException;
-import java.time.LocalDate;
-import java.util.*;
 
 @Service
 @Transactional

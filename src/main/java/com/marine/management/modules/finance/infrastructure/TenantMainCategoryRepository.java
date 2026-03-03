@@ -1,6 +1,6 @@
 package com.marine.management.modules.finance.infrastructure;
 
-import com.marine.management.modules.finance.domain.entity.TenantMainCategory;
+import com.marine.management.modules.finance.domain.entities.TenantMainCategory;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;

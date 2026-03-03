@@ -1,9 +1,9 @@
 package com.marine.management.modules.finance.application;
 
-import com.marine.management.modules.finance.domain.entity.MainCategory;
-import com.marine.management.modules.finance.domain.entity.TenantMainCategory;
-import com.marine.management.modules.finance.domain.entity.TenantWhoSelection;
-import com.marine.management.modules.finance.domain.entity.Who;
+import com.marine.management.modules.finance.domain.entities.MainCategory;
+import com.marine.management.modules.finance.domain.entities.TenantMainCategory;
+import com.marine.management.modules.finance.domain.entities.TenantWhoSelection;
+import com.marine.management.modules.finance.domain.entities.Who;
 import com.marine.management.modules.finance.infrastructure.MainCategoryRepository;
 import com.marine.management.modules.finance.infrastructure.TenantMainCategoryRepository;
 import com.marine.management.modules.finance.infrastructure.TenantWhoSelectionRepository;
@@ -52,15 +52,15 @@ public class TenantReferenceDataInitializer {
      */
     @Transactional
     public void initializeTenantReferenceData() {
-        //Get tenantId from context (will throw if not set)
+        // Get tenantId from context (will throw if not set)
         Long tenantId = TenantContext.getCurrentTenantId();
 
-        logger.info("Initializing reference data for tenant: {}", tenantId);
+        logger.info("🔄 Initializing reference data for tenant: {}", tenantId);
 
         initializeMainCategories();
         initializeWhoSelections();
 
-        logger.info("Reference data initialization completed for tenant: {}", tenantId);
+        logger.info(" Reference data initialization completed for tenant: {}", tenantId);
     }
 
     /**
@@ -70,16 +70,25 @@ public class TenantReferenceDataInitializer {
     private void initializeMainCategories() {
         List<MainCategory> globalCategories = mainCategoryRepository.findAll();
 
-        logger.info("Creating {} TenantMainCategory records for tenant: {}",
+        logger.info("📦 Found {} global MainCategories for tenant: {}",
                 globalCategories.size(), TenantContext.getCurrentTenantId());
 
-        for (MainCategory globalCategory : globalCategories) {
-            //TenantEntityListener otomatik tenant_id ekler
-            TenantMainCategory tenantCategory = TenantMainCategory.create(globalCategory);
-            tenantMainCategoryRepository.save(tenantCategory);
+        if (globalCategories.isEmpty()) {
+            logger.warn("⚠️ No global MainCategories found! Skipping tenant initialization.");
+            return;
         }
 
-        logger.info(" MainCategory initialization completed: {} records", globalCategories.size());
+        //  Create all tenant categories in batch
+        List<TenantMainCategory> tenantCategories = globalCategories.stream()
+                .map(TenantMainCategory::create)
+                .toList();
+
+        //  Save all at once
+        tenantMainCategoryRepository.saveAll(tenantCategories);
+        tenantMainCategoryRepository.flush(); // Force immediate write
+
+        logger.info(" Created {} TenantMainCategory records for tenant: {}",
+                tenantCategories.size(), TenantContext.getCurrentTenantId());
     }
 
     /**
@@ -89,15 +98,24 @@ public class TenantReferenceDataInitializer {
     private void initializeWhoSelections() {
         List<Who> globalWhoList = whoRepository.findAll();
 
-        logger.info("Creating {} TenantWhoSelection records for tenant: {}",
+        logger.info("📦 Found {} global WHO records for tenant: {}",
                 globalWhoList.size(), TenantContext.getCurrentTenantId());
 
-        for (Who globalWho : globalWhoList) {
-            //TenantEntityListener otomatik tenant_id ekler
-            TenantWhoSelection tenantWho = TenantWhoSelection.create(globalWho);
-            tenantWhoSelectionRepository.save(tenantWho);
+        if (globalWhoList.isEmpty()) {
+            logger.warn("⚠️ No global WHO records found! Skipping tenant initialization.");
+            return;
         }
 
-        logger.info(" WHO selection initialization completed: {} records", globalWhoList.size());
+        //  Create all tenant WHO selections in batch
+        List<TenantWhoSelection> tenantWhoSelections = globalWhoList.stream()
+                .map(TenantWhoSelection::create)
+                .toList();
+
+        //  Save all at once
+        tenantWhoSelectionRepository.saveAll(tenantWhoSelections);
+        tenantWhoSelectionRepository.flush(); // Force immediate write
+
+        logger.info(" Created {} TenantWhoSelection records for tenant: {}",
+                tenantWhoSelections.size(), TenantContext.getCurrentTenantId());
     }
 }

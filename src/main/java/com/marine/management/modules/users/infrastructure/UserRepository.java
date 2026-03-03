@@ -11,9 +11,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Repository
 public interface UserRepository extends JpaRepository<User, UUID> {
@@ -77,6 +76,23 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      * Find only active users in organization.
      */
     List<User> findByOrganizationAndIsActiveTrue(Organization organization);
+
+    @Query("""
+        SELECT u.id, CONCAT(u.firstName, ' ', u.lastName)
+        FROM User u
+        WHERE u.id IN :ids
+    """)
+    List<Object[]> findNamesByIdsRaw(@Param("ids") Set<UUID> ids);
+
+    // Default method ile Map'e çevir:
+    default Map<UUID, String> findNamesByIds(Set<UUID> ids) {
+        if (ids == null || ids.isEmpty()) return Map.of();
+        return findNamesByIdsRaw(ids).stream()
+                .collect(Collectors.toMap(
+                        row -> (UUID) row[0],
+                        row -> (String) row[1]
+                ));
+    }
 
     /**
      * Find users by role within organization.

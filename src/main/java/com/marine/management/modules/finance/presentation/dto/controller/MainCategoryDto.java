@@ -1,6 +1,6 @@
 package com.marine.management.modules.finance.presentation.dto.controller;
 
-import com.marine.management.modules.finance.domain.entity.MainCategory;
+import com.marine.management.modules.finance.domain.entities.MainCategory;
 
 /**
  * DTO for MainCategory (global reference data).

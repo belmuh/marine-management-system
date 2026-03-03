@@ -1,25 +1,41 @@
 package com.marine.management.modules.finance.application;
 
 import com.marine.management.modules.finance.application.commands.*;
-import com.marine.management.modules.finance.domain.entity.*;
-import com.marine.management.modules.finance.domain.enums.RecordType;
+import com.marine.management.modules.finance.domain.entities.*;
+import com.marine.management.modules.finance.domain.enums.EntryStatus;
 import com.marine.management.modules.finance.infrastructure.*;
+import com.marine.management.modules.finance.infrastructure.query.EntrySearchCriteria;
+import com.marine.management.modules.finance.infrastructure.query.SortableFields;
+import com.marine.management.modules.finance.infrastructure.specifications.FinancialEntrySpecs;
 import com.marine.management.modules.finance.presentation.dto.EntryResponseDto;
 import com.marine.management.modules.users.domain.User;
 import com.marine.management.shared.exceptions.EntryNotFoundException;
 import com.marine.management.shared.multitenant.TenantContext;
+import com.marine.management.shared.security.EntryAccessPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
-import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
+/**
+ * Service for FinancialEntry CRUD operations.
+ *
+ * Responsibilities:
+ * - CRUD operations with access control
+ * - Search and query operations
+ * - Coordinate domain logic
+ *
+ * Note: Approval workflow is handled by ApprovalService.
+ */
 @Service
 @Transactional(readOnly = true)
 public class FinancialEntryService {
@@ -27,61 +43,131 @@ public class FinancialEntryService {
     private static final Logger logger = LoggerFactory.getLogger(FinancialEntryService.class);
 
     private final FinancialEntryRepository entryRepository;
-    private final FinancialEntrySearchRepository searchRepository;
     private final FinancialCategoryRepository categoryRepository;
     private final TenantWhoSelectionRepository tenantWhoRepository;
     private final TenantMainCategoryRepository tenantMainCategoryRepository;
     private final FinancialEntryFactory entryFactory;
     private final ExchangeRateService exchangeRateService;
+    private final EntryAccessPolicy accessPolicy;
 
     public FinancialEntryService(
             FinancialEntryRepository entryRepository,
-            FinancialEntrySearchRepository searchRepository,
             FinancialCategoryRepository categoryRepository,
             TenantWhoSelectionRepository tenantWhoRepository,
             TenantMainCategoryRepository tenantMainCategoryRepository,
             FinancialEntryFactory entryFactory,
-            ExchangeRateService exchangeRateService
+            ExchangeRateService exchangeRateService,
+            EntryAccessPolicy accessPolicy
     ) {
         this.entryRepository = entryRepository;
-        this.searchRepository = searchRepository;
         this.categoryRepository = categoryRepository;
         this.tenantWhoRepository = tenantWhoRepository;
         this.tenantMainCategoryRepository = tenantMainCategoryRepository;
         this.entryFactory = entryFactory;
         this.exchangeRateService = exchangeRateService;
+        this.accessPolicy = accessPolicy;
     }
 
-    // ============================================
-    // COMMAND METHODS (Transactional) - ⭐ Return DTO
-    // ============================================
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CREATE
+    // ═══════════════════════════════════════════════════════════════════════════
 
     @Transactional
     public EntryResponseDto createEntry(CreateEntryCommand command) {
         guardTenantContext();
-        logger.debug("Creating entry for tenant: {}", TenantContext.getCurrentTenantId());
         verifyUserBelongsToCurrentTenant(command.creator());
 
         FinancialEntry entry = entryFactory.createEntry(command);
         entry.calculateBaseAmount(exchangeRateService);
         FinancialEntry saved = entryRepository.saveAndFlush(entry);
 
-        logger.info("Entry created: id={}, number={}, tenant={}",
-                saved.getId(),
-                saved.getEntryNumber().getValue(),
-                TenantContext.getCurrentTenantId());
+        logger.info("Entry created: id={}, number={}", saved.getId(), saved.getEntryNumber().getValue());
 
-        return EntryResponseDto.from(saved); // ⭐ DTO conversion in service
+        return EntryResponseDto.from(saved);
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // READ - Single Entry
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    public EntryResponseDto getById(UUID id, User currentUser) {
+        guardTenantContext();
+
+        FinancialEntry entry = findEntryOrThrow(id);
+        accessPolicy.checkReadAccess(entry, currentUser);
+
+        return EntryResponseDto.from(entry);
+    }
+
+    public EntryResponseDto getByEntryNumber(String entryNumber, User currentUser) {
+        guardTenantContext();
+
+        FinancialEntry entry = entryRepository.findByEntryNumber_Value(entryNumber)
+                .orElseThrow(() -> EntryNotFoundException.withEntryNumber(entryNumber));
+
+        accessPolicy.checkReadAccess(entry, currentUser);
+
+        return EntryResponseDto.from(entry);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // READ - Lists with Access Control
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Search expenses with role-based filtering.
+     */
+    public Page<EntryResponseDto> searchExpenses(EntrySearchCriteria criteria, User currentUser) {
+        guardTenantContext();
+        verifyUserBelongsToCurrentTenant(currentUser);
+
+        Specification<FinancialEntry> spec = FinancialEntrySpecs.fromCriteria(criteria)
+                .and(accessPolicy.getExpenseReadSpecification(currentUser));
+
+        Sort sort = SortableFields.createSort(criteria.sortColumn(), criteria.sortDirection());
+        Pageable pageable = PageRequest.of(criteria.page(), criteria.size(), sort);
+
+        return entryRepository.findAll(spec, pageable)
+                .map(EntryResponseDto::from);
+    }
+
+    /**
+     * Search incomes (only for users with INCOME_VIEW permission).
+     */
+    public Page<EntryResponseDto> searchIncomes(EntrySearchCriteria criteria, User currentUser) {
+        guardTenantContext();
+        verifyUserBelongsToCurrentTenant(currentUser);
+
+        Specification<FinancialEntry> spec = FinancialEntrySpecs.fromCriteria(criteria)
+                .and(accessPolicy.getIncomeReadSpecification(currentUser));
+
+        Sort sort = SortableFields.createSort(criteria.sortColumn(), criteria.sortDirection());
+        Pageable pageable = PageRequest.of(criteria.page(), criteria.size(), sort);
+
+        return entryRepository.findAll(spec, pageable)
+                .map(EntryResponseDto::from);
+    }
+
+    /**
+     * Legacy search method - delegates to searchExpenses.
+     */
+    public Page<EntryResponseDto> search(EntrySearchCriteria criteria, User currentUser) {
+        return searchExpenses(criteria, currentUser);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // UPDATE
+    // ═══════════════════════════════════════════════════════════════════════════
 
     @Transactional
     public EntryResponseDto updateEntry(UpdateEntryCommand command) {
         guardTenantContext();
-
-        FinancialEntry entry = findEntryOrThrow(command.entryId());
-        FinancialCategory category = findCategoryOrThrow(command.categoryId());
         verifyUserBelongsToCurrentTenant(command.updater());
 
+        FinancialEntry entry = findEntryOrThrow(command.entryId());
+        accessPolicy.checkWriteAccess(entry, command.updater());
+
+        FinancialCategory category = findCategoryOrThrow(command.categoryId());
         TenantWhoSelection tenantWho = resolveTenantWho(command.whoId());
         TenantMainCategory tenantMainCategory = resolveTenantMainCategory(command.mainCategoryId());
 
@@ -91,8 +177,7 @@ public class FinancialEntryService {
                 command.amount(),
                 command.entryDate(),
                 command.paymentMethod(),
-                command.description(),
-                command.updater()
+                command.description()
         );
 
         entry.updateContext(
@@ -102,27 +187,27 @@ public class FinancialEntryService {
                 command.country(),
                 command.city(),
                 command.specificLocation(),
-                command.vendor(),
-                command.updater()
+                command.vendor()
         );
 
         if (command.receiptNumber() != null && !command.receiptNumber().isBlank()) {
-            entry.updateReceiptNumber(command.receiptNumber(), command.updater());
+            entry.updateReceiptNumber(command.receiptNumber());
         }
 
         entry.calculateBaseAmount(exchangeRateService);
 
-        logger.debug("Entry updated: id={}, tenant={}", entry.getId(), TenantContext.getCurrentTenantId());
+        logger.debug("Entry updated: id={}", entry.getId());
 
-        return EntryResponseDto.from(entry); // ⭐ DTO conversion in service
+        return EntryResponseDto.from(entry);
     }
 
     @Transactional
     public EntryResponseDto updateEntryContext(UpdateEntryContextCommand command) {
         guardTenantContext();
+        verifyUserBelongsToCurrentTenant(command.updater());
 
         FinancialEntry entry = findEntryOrThrow(command.entryId());
-        verifyUserBelongsToCurrentTenant(command.updater());
+        accessPolicy.checkWriteAccess(entry, command.updater());
 
         TenantWhoSelection tenantWho = resolveTenantWho(command.whoId());
         TenantMainCategory tenantMainCategory = resolveTenantMainCategory(command.mainCategoryId());
@@ -134,205 +219,158 @@ public class FinancialEntryService {
                 command.country(),
                 command.city(),
                 command.specificLocation(),
-                command.vendor(),
-                command.updater()
+                command.vendor()
         );
 
-        return EntryResponseDto.from(entry); // ⭐ DTO conversion in service
+
+        return EntryResponseDto.from(entry);
     }
 
     @Transactional
     public EntryResponseDto updateEntryMetadata(UpdateEntryMetadataCommand command) {
         guardTenantContext();
-
-        FinancialEntry entry = findEntryOrThrow(command.entryId());
         verifyUserBelongsToCurrentTenant(command.updater());
 
-        entry.updateMetadata(
-                command.frequency(),
-                command.priority(),
-                command.tags(),
-                command.updater()
-        );
+        FinancialEntry entry = findEntryOrThrow(command.entryId());
+        accessPolicy.checkWriteAccess(entry, command.updater());
 
-        return EntryResponseDto.from(entry); // ⭐ DTO conversion in service
+        entry.updateMetadata(command.frequency(), command.priority(), command.tags());
+
+        return EntryResponseDto.from(entry);
     }
 
     @Transactional
     public EntryResponseDto updateReceiptNumber(UpdateReceiptNumberCommand command) {
         guardTenantContext();
-
-        FinancialEntry entry = findEntryOrThrow(command.entryId());
         verifyUserBelongsToCurrentTenant(command.updater());
 
-        entry.updateReceiptNumber(command.receiptNumber(), command.updater());
+        FinancialEntry entry = findEntryOrThrow(command.entryId());
+        accessPolicy.checkWriteAccess(entry, command.updater());
 
-        return EntryResponseDto.from(entry); // ⭐ DTO conversion in service
+        entry.updateReceiptNumber(command.receiptNumber());
+
+        return EntryResponseDto.from(entry);
     }
 
     @Transactional
     public EntryResponseDto updateExchangeRate(UpdateExchangeRateCommand command) {
         guardTenantContext();
-
-        FinancialEntry entry = findEntryOrThrow(command.entryId());
         verifyUserBelongsToCurrentTenant(command.updater());
 
-        entry.updateExchangeRate(command.rate(), command.rateDate(), command.updater());
+        FinancialEntry entry = findEntryOrThrow(command.entryId());
+        accessPolicy.checkWriteAccess(entry, command.updater());
 
-        return EntryResponseDto.from(entry); // ⭐ DTO conversion in service
+        entry.updateExchangeRate(command.rate(), command.rateDate());
+
+        return EntryResponseDto.from(entry);
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DELETE
+    // ═══════════════════════════════════════════════════════════════════════════
 
     @Transactional
     public void deleteEntry(DeleteEntryCommand command) {
         guardTenantContext();
+        verifyUserBelongsToCurrentTenant(command.user());
 
         FinancialEntry entry = findEntryOrThrow(command.entryId());
-        verifyUserBelongsToCurrentTenant(command.user());
-        verifyEditPermission(entry, command.user());
+        accessPolicy.checkDeleteAccess(entry, command.user());
 
         entryRepository.delete(entry);
 
-        logger.info("Entry deleted: id={}, tenant={}", command.entryId(), TenantContext.getCurrentTenantId());
+        logger.info("Entry deleted: id={}", command.entryId());
     }
 
-
-
-    // ============================================
-// ATTACHMENT COMMAND METHODS
-// ============================================
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ATTACHMENT METHODS
+    // ═══════════════════════════════════════════════════════════════════════════
 
     @Transactional
-    public FinancialEntry addAttachment(AddAttachmentCommand command) {
+    public EntryResponseDto addAttachment(AddAttachmentCommand command) {
         guardTenantContext();
-
-        FinancialEntry entry = findEntryOrThrow(command.entryId());
         verifyUserBelongsToCurrentTenant(command.updater());
 
-        entry.addAttachment(command.attachment(), command.updater());
-        return entry;  // ⚠️ Returns entity for internal use by AttachmentService
+        FinancialEntry entry = findEntryOrThrow(command.entryId());
+        accessPolicy.checkWriteAccess(entry, command.updater());
+
+        entry.addAttachment(command.attachment());
+
+        return EntryResponseDto.from(entry);
     }
 
     @Transactional
-    public FinancialEntry removeAttachment(RemoveAttachmentCommand command) {
+    public EntryResponseDto removeAttachment(RemoveAttachmentCommand command) {
         guardTenantContext();
+        verifyUserBelongsToCurrentTenant(command.updater());
 
         FinancialEntry entry = findEntryOrThrow(command.entryId());
-        verifyUserBelongsToCurrentTenant(command.updater());
+        accessPolicy.checkWriteAccess(entry, command.updater());
 
         FinancialEntryAttachment attachment = findAttachmentOrThrow(entry, command.attachmentId());
-        entry.removeAttachment(attachment, command.updater());
-        return entry;  // ⚠️ Returns entity for internal use by AttachmentService
+        entry.removeAttachment(attachment);
+
+        return EntryResponseDto.from(entry);
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // STATUS-BASED QUERIES (no access control - use for reporting)
+    // ═══════════════════════════════════════════════════════════════════════════
 
-    // ============================================
-    // QUERY METHODS (Read-only) - ⭐ Return DTO
-    // ============================================
-
-    Optional<FinancialEntry> findById(UUID id) {
+    public Page<EntryResponseDto> findByStatus(EntryStatus status, Pageable pageable) {
         guardTenantContext();
-        return entryRepository.findById(id);
+        return entryRepository.findByStatus(status, pageable)
+                .map(EntryResponseDto::from);
     }
 
-    public EntryResponseDto getById(UUID id) {
+    public Page<EntryResponseDto> findByStatuses(Set<EntryStatus> statuses, Pageable pageable) {
         guardTenantContext();
-        FinancialEntry entry = entryRepository.findById(id)
-                .orElseThrow(() -> EntryNotFoundException.withId(id));
-
-        return EntryResponseDto.from(entry); // ⭐ DTO conversion in service
+        return entryRepository.findByStatusIn(statuses, pageable)
+                .map(EntryResponseDto::from);
     }
 
-    public EntryResponseDto getByEntryNumber(String entryNumber) {
+    public long countByStatus(EntryStatus status) {
         guardTenantContext();
-        FinancialEntry entry = entryRepository.findByEntryNumber_Value(entryNumber)
-                .orElseThrow(() -> EntryNotFoundException.withEntryNumber(entryNumber));
-
-        return EntryResponseDto.from(entry); // ⭐ DTO conversion in service
+        return entryRepository.countByStatus(status);
     }
 
-    public Page<EntryResponseDto> findByUser(User user, Pageable pageable) {
-        guardTenantContext();
-        verifyUserBelongsToCurrentTenant(user);
+    // ═══════════════════════════════════════════════════════════════════════════
+    // USER CAPABILITIES (for frontend)
+    // ═══════════════════════════════════════════════════════════════════════════
 
-        return entryRepository.findByCreatedById(user.getUserId(), pageable)
-                .map(EntryResponseDto::from); // ⭐ DTO conversion in service
+    public UserCapabilities getUserCapabilities(User user) {
+        return new UserCapabilities(
+                accessPolicy.canViewAllEntries(user),
+                accessPolicy.canViewIncomes(user),
+                accessPolicy.canCreateIncomes(user),
+                accessPolicy.canViewReports(user),
+                accessPolicy.canExportReports(user),
+                accessPolicy.canApproveCaptainLevel(user),
+                accessPolicy.canApproveManagerLevel(user),
+                accessPolicy.canManagePayments(user),
+                accessPolicy.canManageUsers(user)
+        );
     }
 
-    public Page<EntryResponseDto> findByDateRange(LocalDate startDate, LocalDate endDate, Pageable pageable) {
-        guardTenantContext();
+    public record UserCapabilities(
+            boolean canViewAllEntries,
+            boolean canViewIncomes,
+            boolean canCreateIncomes,
+            boolean canViewReports,
+            boolean canExportReports,
+            boolean canApproveCaptainLevel,
+            boolean canApproveManagerLevel,
+            boolean canManagePayments,
+            boolean canManageUsers
+    ) {}
 
-        return entryRepository.findByEntryDateBetween(startDate, endDate, pageable)
-                .map(EntryResponseDto::from); // ⭐ DTO conversion in service
-    }
-
-    public Page<EntryResponseDto> findByType(RecordType type, Pageable pageable) {
-        guardTenantContext();
-
-        return entryRepository.findByEntryType(type, pageable)
-                .map(EntryResponseDto::from); // ⭐ DTO conversion in service
-    }
-
-    public Page<EntryResponseDto> findByCategory(UUID categoryId, Pageable pageable) {
-        guardTenantContext();
-        FinancialCategory category = findCategoryOrThrow(categoryId);
-
-        return entryRepository.findByCategory(category, pageable)
-                .map(EntryResponseDto::from); // ⭐ DTO conversion in service
-    }
-
-    public Page<EntryResponseDto> findByWho(UUID whoId, Pageable pageable) {
-        guardTenantContext();
-
-        return entryRepository.findByTenantWho_Id(whoId, pageable)
-                .map(EntryResponseDto::from); // ⭐ DTO conversion in service
-    }
-
-    public Page<EntryResponseDto> findByMainCategory(UUID mainCategoryId, Pageable pageable) {
-        guardTenantContext();
-
-        return entryRepository.findByTenantMainCategory_Id(mainCategoryId, pageable)
-                .map(EntryResponseDto::from); // ⭐ DTO conversion in service
-    }
-
-    public Page<EntryResponseDto> search(EntrySearchCriteria criteria, Pageable pageable) {
-        guardTenantContext();
-
-        return searchRepository.search(
-                criteria.categoryId(),
-                criteria.entryType(),
-                criteria.whoId(),
-                criteria.mainCategoryId(),
-                criteria.startDate(),
-                criteria.endDate(),
-                pageable
-        ); // Already returns DTO from repository
-    }
-
-    public Page<EntryResponseDto> searchByText(TextSearchCriteria criteria, Pageable pageable) {
-        guardTenantContext();
-
-        return searchRepository.searchByText(
-                criteria.searchTerm(),
-                criteria.entryType(),
-                criteria.startDate(),
-                criteria.endDate(),
-                pageable
-        ); // Already returns DTO from repository
-    }
-
-
-
-    // ============================================
+    // ═══════════════════════════════════════════════════════════════════════════
     // HELPER METHODS
-    // ============================================
+    // ═══════════════════════════════════════════════════════════════════════════
 
     private void guardTenantContext() {
         if (!TenantContext.hasTenantContext()) {
-            logger.error("CRITICAL: Service method called without tenant context!");
-            throw new AccessDeniedException(
-                    "No tenant context available. This is a programming error - " +
-                            "service should only be called within tenant context."
-            );
+            throw new AccessDeniedException("No tenant context available");
         }
     }
 
@@ -341,11 +379,7 @@ public class FinancialEntryService {
         Long userTenantId = user.getOrganization().getOrganizationId();
 
         if (!currentTenantId.equals(userTenantId)) {
-            logger.error("SECURITY VIOLATION: User {} belongs to tenant {} but current context is {}",
-                    user.getUsername(), userTenantId, currentTenantId);
-            throw new AccessDeniedException(
-                    "User does not belong to current tenant. This is a security violation."
-            );
+            throw new AccessDeniedException("User does not belong to current tenant");
         }
     }
 
@@ -356,56 +390,37 @@ public class FinancialEntryService {
 
     private FinancialCategory findCategoryOrThrow(UUID id) {
         return categoryRepository.findById(id)
-                .orElseThrow(() -> new CategoryNotFoundException("Category not found with id: " + id));
-    }
-
-    private void verifyEditPermission(FinancialEntry entry, User user) {
-        entry.canBeEditedBy(user);
+                .orElseThrow(() -> new CategoryNotFoundException("Category not found: " + id));
     }
 
     private TenantWhoSelection resolveTenantWho(UUID whoId) {
-        if (whoId == null) {
-            return null;
-        }
+        if (whoId == null) return null;
         return tenantWhoRepository.findById(whoId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "TenantWhoSelection not found with id: " + whoId
-                ));
+                .orElseThrow(() -> new IllegalArgumentException("TenantWhoSelection not found: " + whoId));
     }
 
     private TenantMainCategory resolveTenantMainCategory(UUID mainCategoryId) {
-        if (mainCategoryId == null) {
-            return null;
-        }
+        if (mainCategoryId == null) return null;
         return tenantMainCategoryRepository.findById(mainCategoryId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "TenantMainCategory not found with id: " + mainCategoryId
-                ));
+                .orElseThrow(() -> new IllegalArgumentException("TenantMainCategory not found: " + mainCategoryId));
     }
-
 
     private FinancialEntryAttachment findAttachmentOrThrow(FinancialEntry entry, UUID attachmentId) {
         return entry.getAttachments().stream()
                 .filter(a -> a.getId().equals(attachmentId))
                 .findFirst()
-                .orElseThrow(() -> new AttachmentNotFoundException(
-                        "Attachment not found with id: " + attachmentId
-                ));
+                .orElseThrow(() -> new AttachmentNotFoundException("Attachment not found: " + attachmentId));
     }
 
-    // ============================================
-    // CUSTOM EXCEPTIONS
-    // ============================================
+    // ═══════════════════════════════════════════════════════════════════════════
+    // EXCEPTIONS
+    // ═══════════════════════════════════════════════════════════════════════════
 
     public static class CategoryNotFoundException extends RuntimeException {
-        public CategoryNotFoundException(String message) {
-            super(message);
-        }
+        public CategoryNotFoundException(String message) { super(message); }
     }
 
     public static class AttachmentNotFoundException extends RuntimeException {
-        public AttachmentNotFoundException(String message) {
-            super(message);
-        }
+        public AttachmentNotFoundException(String message) { super(message); }
     }
 }

@@ -2,6 +2,8 @@ package com.marine.management.modules.organization.domain;
 
 import com.marine.management.shared.domain.BaseAuditedEntity;
 import jakarta.persistence.*;
+
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Objects;
 
@@ -62,6 +64,21 @@ public class Organization extends BaseAuditedEntity {
 
     @Column(nullable = false)
     private Boolean active = true;
+
+    /**
+     * Whether manager approval is enabled for this tenant.
+     * If false, Captain approves everything directly.
+     */
+    @Column(name = "manager_approval_enabled")
+    private boolean managerApprovalEnabled = false;
+
+    /**
+     * Approval limit amount.
+     * If entry amount > limit AND managerApprovalEnabled, requires manager approval.
+     * If null, no limit (all go directly to APPROVED after captain).
+     */
+    @Column(name = "approval_limit", precision = 15, scale = 2)
+    private BigDecimal approvalLimit;
 
     protected Organization() {}
 
@@ -126,33 +143,6 @@ public class Organization extends BaseAuditedEntity {
         return code.toUpperCase();
     }
 
-    public void renameYacht(String newName) {
-        this.yachtName = validateYachtName(newName);
-    }
-
-    public void changeFlagCountry(String newCountry) {
-        this.flagCountry = validateCountryCode(newCountry);
-    }
-
-    public void changeBaseCurrency(String newCurrency) {
-        this.baseCurrency = validateCurrencyCode(newCurrency);
-    }
-
-    public void activate() {
-        this.active = true;
-    }
-
-    public void deactivate() {
-        this.active = false;
-    }
-
-    public boolean isActive(LocalDate today) {
-        if (!active) return false;
-        if (subscriptionStatus == SubscriptionStatus.SUSPENDED) return false;
-        if (subscriptionExpiresAt != null && subscriptionExpiresAt.isBefore(today)) return false;
-        return true;
-    }
-
     public void updateDetails(
             String companyName,
             String yachtType,
@@ -179,6 +169,38 @@ public class Organization extends BaseAuditedEntity {
     public void suspendSubscription() {
         this.subscriptionStatus = SubscriptionStatus.SUSPENDED;
     }
+    public void renameYacht(String newName) {
+        this.yachtName = validateYachtName(newName);
+    }
+    public void changeFlagCountry(String newCountry) {
+        this.flagCountry = validateCountryCode(newCountry);
+    }
+    public void changeBaseCurrency(String newCurrency) {
+        this.baseCurrency = validateCurrencyCode(newCurrency);
+    }
+    public void activate() {
+        this.active = true;
+    }
+    public void deactivate() {
+        this.active = false;
+    }
+
+    public boolean isActive(LocalDate today) {
+        if (!active) return false;
+        if (subscriptionStatus == SubscriptionStatus.SUSPENDED) return false;
+        if (subscriptionExpiresAt != null && subscriptionExpiresAt.isBefore(today)) return false;
+        return true;
+    }
+
+    public void enableManagerApproval(BigDecimal limit) {
+        this.managerApprovalEnabled = true;
+        this.approvalLimit = limit;
+    }
+
+    public void disableManagerApproval() {
+        this.managerApprovalEnabled = false;
+        this.approvalLimit = null;
+    }
 
     public String getYachtName() { return yachtName; }
     public String getCompanyName() { return companyName; }
@@ -190,6 +212,12 @@ public class Organization extends BaseAuditedEntity {
     public String getCurrentLocation() { return currentLocation; }
     public SubscriptionStatus getSubscriptionStatus() { return subscriptionStatus; }
     public LocalDate getSubscriptionExpiresAt() { return subscriptionExpiresAt; }
+    public boolean isManagerApprovalEnabled() { return managerApprovalEnabled; }
+    public void setManagerApprovalEnabled(boolean managerApprovalEnabled) {
+        this.managerApprovalEnabled = managerApprovalEnabled;
+    }
+    public BigDecimal getApprovalLimit() { return approvalLimit;}
+    public void setApprovalLimit(BigDecimal approvalLimit) { this.approvalLimit = approvalLimit; }
 
     @Override
     public boolean equals(Object o) {

@@ -66,13 +66,13 @@ public class SecurityConfig {
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
                         .requestMatchers("/api/users/**")
-                        .hasAnyAuthority("SUPER_ADMIN", "ADMIN", "MANAGER")
+                        .hasAnyRole("SUPER_ADMIN", "ADMIN", "MANAGER")
 
                         .requestMatchers("/api/finance/**")
-                        .hasAnyAuthority("SUPER_ADMIN", "ADMIN", "MANAGER", "CAPTAIN", "USER")
+                        .hasAnyRole("SUPER_ADMIN", "ADMIN", "MANAGER", "CAPTAIN", "CREW")
 
                         .requestMatchers("/api/reports/**")
-                        .hasAnyAuthority("SUPER_ADMIN", "ADMIN", "MANAGER", "CAPTAIN")
+                        .hasAnyRole("SUPER_ADMIN", "ADMIN", "MANAGER", "CAPTAIN")
 
                         .anyRequest().authenticated()
                 )

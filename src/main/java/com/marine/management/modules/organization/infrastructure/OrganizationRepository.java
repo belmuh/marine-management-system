@@ -14,6 +14,6 @@ public interface OrganizationRepository extends JpaRepository<Organization, Long
 
     boolean existsByYachtName(String yachtName);
 
-    // ✅ NEW: Find all active organizations (for scheduled tasks)
+    //  NEW: Find all active organizations (for scheduled tasks)
     List<Organization> findAllByActiveTrue();
 }

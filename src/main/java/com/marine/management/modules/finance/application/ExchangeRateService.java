@@ -1,6 +1,6 @@
 package com.marine.management.modules.finance.application;
 
-import com.marine.management.modules.finance.domain.entity.ExchangeRate;
+import com.marine.management.modules.finance.domain.entities.ExchangeRate;
 import com.marine.management.modules.finance.infrastructure.ExchangeRateRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -105,7 +105,7 @@ public class ExchangeRateService {
         logger.info("Fetching rate from API: EUR -> {} on {}", currency, date);
 
         try {
-            // ✅ NEW API - Always returns latest rates (no date param needed)
+            //  NEW API - Always returns latest rates (no date param needed)
             // This API doesn't support historical dates, but it's free and reliable
             @SuppressWarnings("unchecked")
             Map<String, Object> response = restTemplate.getForObject(API_URL, Map.class);
@@ -151,7 +151,7 @@ public class ExchangeRateService {
         } catch (Exception e) {
             logger.error("Failed to fetch rate for {} on {}: {}", currency, date, e.getMessage());
 
-            // ✅ FALLBACK: Use approximate rates if API fails
+            //  FALLBACK: Use approximate rates if API fails
             logger.warn("Using fallback rate for {}", currency);
             return useFallbackRate(date, currency);
         }

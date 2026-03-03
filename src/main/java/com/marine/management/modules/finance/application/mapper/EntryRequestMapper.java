@@ -1,6 +1,7 @@
 package com.marine.management.modules.finance.application.mapper;
 
 import com.marine.management.modules.finance.application.commands.*;
+import com.marine.management.modules.finance.infrastructure.query.EntrySearchCriteria;
 import com.marine.management.modules.finance.presentation.dto.MoneyDto;
 import com.marine.management.modules.finance.presentation.dto.controller.*;
 import com.marine.management.modules.users.domain.User;
@@ -142,27 +143,36 @@ public class EntryRequestMapper {
     // SEARCH
     // ============================================
 
-    public EntrySearchCriteria toEntrySearchCriteria(
-            EntrySearchRequest request
-    ) {
-        return new EntrySearchCriteria(
-                request.categoryId(),
-                request.entryType(),
-                request.whoId(),
-                request.mainCategoryId(),
-                request.startDate(),
-                request.endDate()
-        );
+    /**
+     * Controller request'inden EntrySearchCriteria oluşturur.
+     * Tüm search parametrelerini (filter + sort + pagination) içerir.
+     */
+    public EntrySearchCriteria toSearchCriteria(EntrySearchRequest request) {
+        return EntrySearchCriteria.builder()
+                .categoryId(request.categoryId())
+                .entryType(request.entryType())
+                .whoId(request.whoId())
+                .mainCategoryId(request.mainCategoryId())
+                .startDate(request.startDate())
+                .endDate(request.endDate())
+                .searchTerm(request.searchTerm())
+                .sortColumn(request.sortColumn())
+                .sortDirection(request.sortDirection())
+                .page(request.page())
+                .size(request.size())
+                .build();
     }
 
-    public TextSearchCriteria toTextSearchCriteria(
-            TextSearchRequest request
-    ) {
-        return new TextSearchCriteria(
-                request.searchTerm(),
-                request.entryType(),
-                request.startDate(),
-                request.endDate()
-        );
+    public EntrySearchCriteria toSearchCriteria(TextSearchRequest request) {
+        return EntrySearchCriteria.builder()
+                .searchTerm(request.searchTerm())
+                .entryType(request.entryType())
+                .startDate(request.startDate())
+                .endDate(request.endDate())
+                .sortColumn(request.sortColumn())
+                .sortDirection(request.sortDirection())
+                .page(request.page())
+                .size(request.size())
+                .build();
     }
 }

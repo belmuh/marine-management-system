@@ -1,8 +1,8 @@
-// modules/users/domain/User.java
 package com.marine.management.modules.users.domain;
 
 import com.marine.management.modules.organization.domain.Organization;
 import com.marine.management.shared.domain.BaseAuditedEntity;
+import com.marine.management.shared.security.Permission;
 import com.marine.management.shared.security.Role;
 import com.marine.management.shared.security.TenantAwareUserDetails;
 import jakarta.persistence.*;
@@ -13,10 +13,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
-import java.util.Collection;
-import java.util.List;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
 
 @Entity
 @Table(
@@ -40,7 +37,6 @@ public class User extends BaseAuditedEntity implements UserDetails, TenantAwareU
     @JoinColumn(name = "organization_id", nullable = false, updatable = false)
     private Organization organization;
 
-    // ⭐ SINGLE SOURCE OF TRUTH: email
     @Column(unique = true, nullable = false, length = 100)
     @Email
     private String email;
@@ -51,12 +47,12 @@ public class User extends BaseAuditedEntity implements UserDetails, TenantAwareU
     @Column(name = "last_name", length = 50)
     private String lastName;
 
-    @Column(name = "password_hash", nullable = false)
+    @Column(name = "password_hash", nullable = false, length = 60)  // 👈 BCrypt needs 60
     private String password;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private Role role = Role.USER;
+    private Role role = Role.CREW;  // 👈 CHANGED: USER → CREW
 
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
@@ -73,9 +69,9 @@ public class User extends BaseAuditedEntity implements UserDetails, TenantAwareU
         this.organization = Objects.requireNonNull(organization, "Organization cannot be null");
     }
 
-    // ⭐ FACTORY METHODS
+    // FACTORY METHODS
     public static User create(String email, String plainPassword, Organization organization) {
-        return new User(email, plainPassword, Role.USER, organization);
+        return new User(email, plainPassword, Role.CREW, organization);
     }
 
     public static User createWithRole(String email, String plainPassword, Role role, Organization organization) {
@@ -96,15 +92,14 @@ public class User extends BaseAuditedEntity implements UserDetails, TenantAwareU
         return user;
     }
 
-    // Called on successful login
     public void updateLastLogin(LocalDateTime loginTime) {
         this.lastLoginAt = loginTime;
     }
 
-    // UserDetails implementation - email is username for Spring Security
+    // UserDetails implementation
     @Override
     public String getUsername() {
-        return email;  // Spring Security uses this for authentication
+        return email;
     }
 
     @Override
@@ -112,13 +107,35 @@ public class User extends BaseAuditedEntity implements UserDetails, TenantAwareU
         return password;
     }
 
-    public LocalDateTime getLastLoginAt() {
-        return lastLoginAt;
-    }
-
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority(role.name()));
+        Set<GrantedAuthority> authorities = new HashSet<>();
+
+        System.out.println("=== DEBUG getAuthorities ===");
+        System.out.println("User: " + this.email);
+        System.out.println("Role field: " + this.role);
+
+        if (this.role == null) {
+            System.out.println("WARNING: Role is NULL!");
+            return authorities;
+        }
+
+        // 1. Role authority (ROLE_ prefix for Spring Security hasRole() check)
+        authorities.add(new SimpleGrantedAuthority("ROLE_" + role.name()));
+
+        Set<Permission> permissions = role.getAllPermissions();
+        System.out.println("Permissions count: " + permissions.size());
+        System.out.println("Permissions: " + permissions);
+
+        // 2. Permission authorities (without prefix for hasAuthority() check)
+        role.getAllPermissions().forEach(permission ->
+                authorities.add(new SimpleGrantedAuthority(permission.name()))
+        );
+
+        System.out.println("Total authorities: " + authorities);
+        System.out.println("=== END DEBUG ===");
+
+        return authorities;
     }
 
     @Override
@@ -141,14 +158,14 @@ public class User extends BaseAuditedEntity implements UserDetails, TenantAwareU
         return isActive;
     }
 
-    // ⭐ TenantAwareUserDetails implementation
+    // TenantAwareUserDetails implementation
     @Override
     public Long getTenantId() {
         return getOrganizationId();
     }
 
     @Override
-    public String getRole() {
+    public String getRole() {  // Interface requirement (String)
         return role.name();
     }
 
@@ -157,9 +174,14 @@ public class User extends BaseAuditedEntity implements UserDetails, TenantAwareU
         return id;
     }
 
-    // ⭐ BUSINESS METHODS
+    // BUSINESS METHODS
     public UUID getUserId() {
         return id;
+    }
+
+    //  NEW: Get role as enum
+    public Role getRoleEnum() {
+        return role;
     }
 
     public boolean isActive() {
@@ -174,36 +196,26 @@ public class User extends BaseAuditedEntity implements UserDetails, TenantAwareU
         this.isActive = false;
     }
 
-    public boolean canManageFinancialEntries() {
-        return role.canCreateEntry();
-    }
 
-    public boolean canViewAllEntries() {
-        return role.canViewAllEntries();
-    }
-
-    public boolean canEditAnyEntry() {
-        return role.canEditAnyEntry();
-    }
-
-    public boolean canDeleteEntry() {
-        return role.canDeleteEntry();
-    }
-
-    public boolean canViewReports() {
-        return role.canViewReports();
-    }
-
-    public boolean canViewBudgets() {
-        return role.canViewBudgets();
-    }
-
+    // Existing permissions
     public boolean isAdmin() {
         return role.isAdmin();
     }
 
     public boolean isSuperAdmin() {
         return role.isSuperAdmin();
+    }
+
+    public boolean isCrew() {
+        return role.isCrew();
+    }
+
+    public boolean isCaptain() {
+        return role.isCaptain();
+    }
+
+    public boolean isManager() {
+        return role.isManager();
     }
 
     public boolean credentialsMatch(String inputPassword, PasswordEncoder encoder) {
@@ -224,7 +236,6 @@ public class User extends BaseAuditedEntity implements UserDetails, TenantAwareU
         this.role = Objects.requireNonNull(newRole, "Role cannot be null");
     }
 
-    // ⭐ VALIDATION
     private String validateEmail(String email) {
         if (email == null || email.trim().isEmpty()) {
             throw new IllegalArgumentException("Email cannot be null or empty");
@@ -235,7 +246,7 @@ public class User extends BaseAuditedEntity implements UserDetails, TenantAwareU
         return email.trim().toLowerCase();
     }
 
-    // ⭐ GETTERS
+    // GETTERS
     public Organization getOrganization() {
         return organization;
     }
@@ -260,6 +271,10 @@ public class User extends BaseAuditedEntity implements UserDetails, TenantAwareU
         if (firstName == null && lastName == null) return email;
         if (firstName != null && lastName != null) return firstName + " " + lastName;
         return firstName != null ? firstName : lastName;
+    }
+
+    public LocalDateTime getLastLoginAt() {
+        return lastLoginAt;
     }
 
     public void setFirstName(String firstName) {
