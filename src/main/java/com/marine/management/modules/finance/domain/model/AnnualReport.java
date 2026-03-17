@@ -19,7 +19,8 @@ public record AnnualReport(
         int year,
         String currency,
         Map<Integer, MonthlyTotal> monthlyTotals,
-        List<CategoryYearSummary> categoryBreakdowns
+        List<CategoryYearSummary> categoryBreakdowns,
+        BigDecimal carryOverBalance
 ) {
     /**
      * Compact constructor ensuring immutability.

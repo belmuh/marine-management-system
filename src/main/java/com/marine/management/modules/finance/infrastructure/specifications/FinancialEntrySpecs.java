@@ -140,7 +140,7 @@ public class FinancialEntrySpecs {
         };
     }
 
-    // ✅ YENİ: WHO filter - Long id ile (entity'deki Who.id Long)
+    //  YENİ: WHO filter - Long id ile (entity'deki Who.id Long)
     public static Specification<FinancialEntry> whoEquals(Long whoId) {
         return (root, query, cb) -> {
             if (whoId == null) return null;
@@ -159,7 +159,7 @@ public class FinancialEntrySpecs {
         };
     }
 
-    // ✅ YENİ: MainCategory filter - Long id ile
+    //  YENİ: MainCategory filter - Long id ile
     public static Specification<FinancialEntry> mainCategoryEquals(Long mainCategoryId) {
         return (root, query, cb) -> {
             if (mainCategoryId == null) return null;
@@ -243,6 +243,10 @@ public class FinancialEntrySpecs {
                 Join<?, ?> tenantMainCat = root.join("tenantMainCategory", JoinType.LEFT);
                 Join<?, ?> mainCat = tenantMainCat.join("mainCategory", JoinType.LEFT);
                 predicates.add(cb.equal(mainCat.get("id"), criteria.mainCategoryId()));
+            }
+
+            if (criteria.status() != null && !criteria.status().isEmpty()) {
+                predicates.add(root.get("status").in(criteria.status()));
             }
 
             // Date range filter

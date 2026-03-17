@@ -21,7 +21,8 @@ public record PeriodReport(
         Period period,
         List<MonthlyBreakdown> categoryBreakdowns,
         Map<Integer, MonthlyTotal> monthlyTotals,
-        String currency
+        String currency,
+        BigDecimal carryOverBalance
 ) {
     /**
      * Compact constructor ensuring immutability.
@@ -54,11 +55,25 @@ public record PeriodReport(
     }
 
     /**
-     * Calculates net balance for the period.
+     * Calculates net balance for the period (income - expense, without carry-over).
      *
      * @return Total income minus total expense
      */
     public BigDecimal getNetBalance() {
         return getTotalIncome().subtract(getTotalExpense());
+    }
+
+    /**
+     * Gets the remaining money at period end.
+     *
+     * Returns the cumulative balance from the last month of the period.
+     * Includes carry-over from prior periods.
+     *
+     * @return Period-end cumulative balance
+     */
+    public BigDecimal getRemainingMoney() {
+        int lastMonth = period.endDate().getMonthValue();
+        MonthlyTotal last = monthlyTotals.get(lastMonth);
+        return last != null ? last.cumulative() : BigDecimal.ZERO;
     }
 }

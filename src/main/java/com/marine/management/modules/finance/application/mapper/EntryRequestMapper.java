@@ -153,6 +153,7 @@ public class EntryRequestMapper {
                 .entryType(request.entryType())
                 .whoId(request.whoId())
                 .mainCategoryId(request.mainCategoryId())
+                .status(request.status())
                 .startDate(request.startDate())
                 .endDate(request.endDate())
                 .searchTerm(request.searchTerm())

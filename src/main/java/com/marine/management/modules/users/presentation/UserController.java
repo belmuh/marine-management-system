@@ -49,7 +49,7 @@ public class UserController {
      * @return List of users in current tenant
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @PreAuthorize("hasAuthority('USER_VIEW')")
     public ResponseEntity<List<UserDTO>> getAllUsers() {
         List<User> users = userService.getAllUsers();
         List<UserDTO> response = users.stream()
@@ -65,7 +65,7 @@ public class UserController {
      * @return User details
      */
     @GetMapping("/{userId}")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @PreAuthorize("hasAuthority('USER_VIEW') or #userId == authentication.principal.id")
     public ResponseEntity<UserDTO> getUserById(@PathVariable UUID userId) {
         User user = userService.getUserByIdOrThrow(userId);
         return ResponseEntity.ok(UserDTO.from(user));
@@ -82,7 +82,7 @@ public class UserController {
      * @return Created user details
      */
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('USER_MANAGE')")
     public ResponseEntity<UserDTO> createUser(
             @Valid @RequestBody CreateUserRequest request,
             @AuthenticationPrincipal User currentUser
@@ -111,7 +111,7 @@ public class UserController {
      * @return Updated user details
      */
     @PutMapping("/{userId}/profile")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or #userId == authentication.principal.id")
+    @PreAuthorize("hasAuthority('USER_MANAGE') or #userId == authentication.principal.id")
     public ResponseEntity<UserDTO> updateUserProfile(
             @PathVariable UUID userId,
             @Valid @RequestBody UpdateUserRequest request
@@ -135,7 +135,7 @@ public class UserController {
      * @return Updated user details
      */
     @PutMapping("/{userId}/role")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('USER_MANAGE')")
     public ResponseEntity<UserDTO> updateUserRole(
             @PathVariable UUID userId,
             @Valid @RequestBody UpdateUserRoleRequest request
@@ -155,7 +155,7 @@ public class UserController {
      * @return Empty response
      */
     @PutMapping("/{userId}/password")
-    @PreAuthorize("hasRole('ADMIN') or #userId == authentication.principal.id")
+    @PreAuthorize("hasAuthority('USER_MANAGE') or #userId == authentication.principal.id")
     public ResponseEntity<Void> changePassword(
             @PathVariable UUID userId,
             @Valid @RequestBody ChangePasswordRequest request
@@ -173,7 +173,7 @@ public class UserController {
      * @return Activated user details
      */
     @PatchMapping("/{id}/activate")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('USER_MANAGE')")
     public ResponseEntity<UserDTO> activate(@PathVariable UUID id) {
         User user = userService.activate(id);
         return ResponseEntity.ok(UserDTO.from(user));
@@ -188,7 +188,7 @@ public class UserController {
      * @return Deactivated user details
      */
     @PatchMapping("/{id}/deactivate")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('USER_MANAGE')")
     public ResponseEntity<UserDTO> deactivate(@PathVariable UUID id) {
         User user = userService.deactivate(id);
         return ResponseEntity.ok(UserDTO.from(user));
@@ -203,7 +203,7 @@ public class UserController {
      * @return Empty response
      */
     @DeleteMapping("/{userId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('USER_MANAGE')")
     public ResponseEntity<Void> deleteUser(@PathVariable UUID userId) {
         userService.deleteUser(userId);
         return ResponseEntity.noContent().build();

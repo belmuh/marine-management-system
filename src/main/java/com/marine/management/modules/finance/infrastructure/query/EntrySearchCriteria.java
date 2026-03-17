@@ -1,8 +1,10 @@
 package com.marine.management.modules.finance.infrastructure.query;
 
+import com.marine.management.modules.finance.domain.enums.EntryStatus;
 import com.marine.management.modules.finance.domain.enums.RecordType;
 
 import java.time.LocalDate;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -22,6 +24,7 @@ public record EntrySearchCriteria(
         RecordType entryType,
         Long whoId,
         Long mainCategoryId,
+        Set<EntryStatus> status,
         LocalDate startDate,
         LocalDate endDate,
         String searchTerm,
@@ -74,6 +77,7 @@ public record EntrySearchCriteria(
         private RecordType entryType;
         private Long whoId;
         private Long mainCategoryId;
+        private Set<EntryStatus> status;
         private LocalDate startDate;
         private LocalDate endDate;
         private String searchTerm;
@@ -99,6 +103,11 @@ public record EntrySearchCriteria(
 
         public Builder mainCategoryId(Long val) {
             this.mainCategoryId = val;
+            return this;
+        }
+
+        public Builder status(Set<EntryStatus> val) {
+            this.status = val;
             return this;
         }
 
@@ -161,6 +170,7 @@ public record EntrySearchCriteria(
                     entryType,
                     whoId,
                     mainCategoryId,
+                    status,
                     startDate,
                     endDate,
                     searchTerm,

@@ -21,11 +21,12 @@ public class AnnualReportMapper {
 
     public AnnualBreakdownDto toDto(AnnualReport report) {
         return new AnnualBreakdownDto(
-                report.year(),                           // ✅ record accessor
-                mapCategoryBreakdowns(report.categoryBreakdowns()),  // ✅ record accessor
-                mapMonthlyTotals(report.monthlyTotals()),            // ✅ record accessor
+                report.year(),
+                mapCategoryBreakdowns(report.categoryBreakdowns()),
+                mapMonthlyTotals(report.monthlyTotals()),
                 report.getGrandTotal(),
-                report.getRemainingMoney()
+                report.getRemainingMoney(),
+                report.carryOverBalance()
         );
     }
 

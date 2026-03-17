@@ -303,6 +303,8 @@ public enum EntryStatus {
         return this == APPROVED || this == PARTIALLY_PAID;
     }
 
+    public boolean allowsPaymentReversal() { return this == PARTIALLY_PAID || this == PAID;}
+
     // ═══════════════════════════════════════════════════════════════════════════
     // DISPLAY HELPERS
     // ═══════════════════════════════════════════════════════════════════════════

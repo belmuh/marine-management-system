@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,7 +58,11 @@ public class GenerateAnnualReportUseCase {
     public AnnualBreakdownDto execute(int year) {
         validateYear(year);
 
+        LocalDate periodStart = LocalDate.of(year, 1, 1);
+
         // Fetch data from database
+        BigDecimal carryOver = reportRepository.findCarryOverBalance(periodStart);
+
         List<FinancialEntryReportRepository.CategoryMonthBreakdownProjection> categoryBreakdowns =
                 reportRepository.findCategoryMonthBreakdown(RecordType.EXPENSE, year);
 
@@ -65,7 +70,7 @@ public class GenerateAnnualReportUseCase {
                 reportRepository.findMonthlyIncomeExpense(year);
 
         // Build domain model
-        AnnualReport report = buildAnnualReport(year, categoryBreakdowns, monthlyTotals);
+        AnnualReport report = buildAnnualReport(year, categoryBreakdowns, monthlyTotals, carryOver);
 
         // Map to DTO
         return annualReportMapper.toDto(report);
@@ -77,16 +82,18 @@ public class GenerateAnnualReportUseCase {
     private AnnualReport buildAnnualReport(
             int year,
             List<FinancialEntryReportRepository.CategoryMonthBreakdownProjection> categoryBreakdowns,
-            List<FinancialEntryReportRepository.MonthlyIncomeExpenseProjection> monthlyTotals
+            List<FinancialEntryReportRepository.MonthlyIncomeExpenseProjection> monthlyTotals,
+            BigDecimal carryOver
     ) {
         List<CategoryYearSummary> summaries = buildCategorySummaries(categoryBreakdowns);
-        Map<Integer, MonthlyTotal> totalsMap = buildMonthlyTotals(monthlyTotals);
+        Map<Integer, MonthlyTotal> totalsMap = buildMonthlyTotals(monthlyTotals, carryOver);
 
         return new AnnualReport(
                 year,
                 DEFAULT_CURRENCY,
                 totalsMap,
-                summaries
+                summaries,
+                carryOver
         );
     }
 
@@ -128,7 +135,8 @@ public class GenerateAnnualReportUseCase {
      * Builds monthly totals with cumulative balance.
      */
     private Map<Integer, MonthlyTotal> buildMonthlyTotals(
-            List<FinancialEntryReportRepository.MonthlyIncomeExpenseProjection> projections
+            List<FinancialEntryReportRepository.MonthlyIncomeExpenseProjection> projections,
+            BigDecimal carryOver
     ) {
         Map<Integer, BigDecimal> incomeByMonth = new HashMap<>();
         Map<Integer, BigDecimal> expenseByMonth = new HashMap<>();
@@ -144,18 +152,20 @@ public class GenerateAnnualReportUseCase {
             }
         }
 
-        return buildMonthlyTotalsMap(incomeByMonth, expenseByMonth);
+        return buildMonthlyTotalsMap(incomeByMonth, expenseByMonth, carryOver);
     }
 
     /**
-     * Calculates cumulative balance for each month.
+     * Calculates cumulative balance for each month, starting from carry-over balance.
+     * carryOver = net income - expense for all approved entries before this year.
      */
     private Map<Integer, MonthlyTotal> buildMonthlyTotalsMap(
             Map<Integer, BigDecimal> incomeByMonth,
-            Map<Integer, BigDecimal> expenseByMonth
+            Map<Integer, BigDecimal> expenseByMonth,
+            BigDecimal carryOver
     ) {
         Map<Integer, MonthlyTotal> totals = new HashMap<>();
-        BigDecimal cumulative = BigDecimal.ZERO;
+        BigDecimal cumulative = carryOver;
 
         for (int month = 1; month <= 12; month++) {
             BigDecimal income = incomeByMonth.getOrDefault(month, BigDecimal.ZERO);

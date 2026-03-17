@@ -1,5 +1,6 @@
 package com.marine.management.modules.finance.domain.entities;
 
+import com.marine.management.modules.finance.domain.enums.AttachmentType;
 import com.marine.management.modules.users.domain.User;
 import jakarta.persistence.*;
 import org.hibernate.envers.Audited;
@@ -69,6 +70,10 @@ public class FinancialEntryAttachment {
     @Column(name = "content_type", nullable = false, length = 100)
     private String contentType;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "attachment_type", nullable = false, length = 20)
+    private AttachmentType attachmentType;
+
     @NotAudited
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "uploaded_by", nullable = false)
@@ -95,6 +100,7 @@ public class FinancialEntryAttachment {
             String filePath,
             Long fileSize,
             String contentType,
+            AttachmentType attachmentType,
             User uploadedBy
     ) {
         FinancialEntryAttachment attachment = new FinancialEntryAttachment();
@@ -103,6 +109,7 @@ public class FinancialEntryAttachment {
         attachment.filePath = filePath;
         attachment.fileSize = fileSize;
         attachment.contentType = contentType;
+        attachment.attachmentType = attachmentType;
         attachment.uploadedBy = uploadedBy;
         attachment.uploadedAt = LocalDateTime.now();
 
@@ -186,6 +193,9 @@ public class FinancialEntryAttachment {
         if (contentType == null || contentType.isBlank()) {
             throw new IllegalStateException("Content type is required");
         }
+        if (attachmentType == null) {
+            throw new IllegalStateException("Attachment type is required");
+        }
         if (uploadedBy == null) {
             throw new IllegalStateException("Uploader is required");
         }
@@ -219,6 +229,10 @@ public class FinancialEntryAttachment {
 
     public String getContentType() {
         return contentType;
+    }
+
+    public AttachmentType getAttachmentType() {
+        return attachmentType;
     }
 
     public User getUploadedBy() {

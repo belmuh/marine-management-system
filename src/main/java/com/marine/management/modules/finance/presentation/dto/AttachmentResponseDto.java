@@ -1,6 +1,7 @@
 package com.marine.management.modules.finance.presentation.dto;
 
 import com.marine.management.modules.finance.domain.entities.FinancialEntryAttachment;
+import com.marine.management.modules.finance.domain.enums.AttachmentType;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.time.LocalDateTime;
@@ -15,6 +16,7 @@ public record AttachmentResponseDto(
         Long fileSize,
         String readableFileSize,
         String contentType,
+        AttachmentType attachmentType,
         String fileExtension,
         boolean isImage,
         boolean isPdf,
@@ -37,6 +39,7 @@ public record AttachmentResponseDto(
                 attachment.getFileSize(),
                 attachment.getReadableFileSize(),
                 attachment.getContentType(),
+                attachment.getAttachmentType(),
                 attachment.getFileExtension(),
                 attachment.isImage(),
                 attachment.isPdf(),

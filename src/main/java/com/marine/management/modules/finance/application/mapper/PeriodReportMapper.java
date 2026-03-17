@@ -26,9 +26,9 @@ public class PeriodReportMapper {
                 report.period().endDate().toString(),
                 mapCategoryBreakdowns(report.categoryBreakdowns()),
                 mapMonthlyTotals(report.monthlyTotals()),
-                report.getTotalIncome(),
                 report.getTotalExpense(),
-                report.getNetBalance()
+                report.getRemainingMoney(),
+                report.carryOverBalance()
         );
     }
 

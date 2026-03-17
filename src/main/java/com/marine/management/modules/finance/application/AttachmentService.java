@@ -2,6 +2,7 @@ package com.marine.management.modules.finance.application;
 
 import com.marine.management.modules.finance.domain.entities.FinancialEntry;
 import com.marine.management.modules.finance.domain.entities.FinancialEntryAttachment;
+import com.marine.management.modules.finance.domain.enums.AttachmentType;
 import com.marine.management.modules.finance.infrastructure.FinancialEntryRepository;
 import com.marine.management.modules.finance.presentation.dto.AttachmentResponseDto;
 import com.marine.management.modules.users.domain.User;
@@ -9,16 +10,11 @@ import com.marine.management.shared.exceptions.AttachmentNotFoundException;
 import com.marine.management.shared.exceptions.EntryNotFoundException;
 import com.marine.management.shared.multitenant.TenantContext;
 import com.marine.management.shared.security.EntryAccessPolicy;
-import org.springframework.core.io.Resource;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -51,6 +47,7 @@ public class AttachmentService {
     public AttachmentResponseDto addAttachment(
             UUID entryId,
             MultipartFile file,
+            AttachmentType attachmentType,
             User uploadedBy
     ) {
         guardTenantContext();
@@ -62,8 +59,15 @@ public class AttachmentService {
         // Validate file
         validator.validate(file);
 
+        // Compute 1-based sequence for this attachment type within the entry
+        int sequence = (int) entry.getAttachments().stream()
+                .filter(a -> attachmentType == a.getAttachmentType())
+                .count() + 1;
+
         // Store file and create attachment
-        FinancialEntryAttachment attachment = storeAndCreateAttachment(file, uploadedBy);
+        FinancialEntryAttachment attachment = storeAndCreateAttachment(
+                file, entry, attachmentType, sequence, uploadedBy
+        );
 
         // Add to entry
         entry.addAttachment(attachment);
@@ -74,10 +78,11 @@ public class AttachmentService {
     public List<AttachmentResponseDto> addAttachments(
             UUID entryId,
             List<MultipartFile> files,
+            AttachmentType attachmentType,
             User uploadedBy
     ) {
         return files.stream()
-                .map(file -> addAttachment(entryId, file, uploadedBy))
+                .map(file -> addAttachment(entryId, file, attachmentType, uploadedBy))
                 .collect(Collectors.toList());
     }
 
@@ -93,21 +98,19 @@ public class AttachmentService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Returns a short-lived presigned R2 URL for direct browser download.
+     * The file is served from Cloudflare R2, not through this server.
+     */
     @Transactional(readOnly = true)
-    public ResponseEntity<Resource> downloadAttachment(
-            UUID entryId,
-            UUID attachmentId,
-            User currentUser  // 🆕 User parametresi
-    ) {
+    public String getDownloadUrl(UUID entryId, UUID attachmentId, User currentUser) {
         guardTenantContext();
 
         FinancialEntry entry = findEntryOrThrow(entryId);
-        accessPolicy.checkReadAccess(entry, currentUser);  // 🆕 Access control
+        accessPolicy.checkReadAccess(entry, currentUser);
 
         FinancialEntryAttachment attachment = findAttachmentInEntry(entry, attachmentId);
-        Resource resource = fileStorageService.loadFileAsResource(attachment.getFileName());
-
-        return createFileDownloadResponse(resource, attachment);
+        return fileStorageService.getPresignedDownloadUrl(attachment.getFileName());
     }
 
     public void removeAttachment(
@@ -135,16 +138,23 @@ public class AttachmentService {
 
     private FinancialEntryAttachment storeAndCreateAttachment(
             MultipartFile file,
+            FinancialEntry entry,
+            AttachmentType attachmentType,
+            int sequence,
             User uploadedBy
     ) {
-        String storedFilename = fileStorageService.storeFile(file);
+        String entryNumber = entry.getEntryNumber().getValue();
+        String storedFilename = fileStorageService.storeFile(
+                file, entryNumber, attachmentType, sequence
+        );
 
         return FinancialEntryAttachment.create(
-                storedFilename,
+                storedFilename,       // R2 object key (used as fileName in DB)
                 file.getOriginalFilename(),
-                fileStorageService.getFileStorageLocation() + "/" + storedFilename,
+                storedFilename,       // filePath = same as key for R2 (no full path needed)
                 file.getSize(),
                 file.getContentType(),
+                attachmentType,
                 uploadedBy
         );
     }
@@ -167,25 +177,4 @@ public class AttachmentService {
                 .orElseThrow(() -> AttachmentNotFoundException.withId(attachmentId));
     }
 
-    private ResponseEntity<Resource> createFileDownloadResponse(
-            Resource resource,
-            FinancialEntryAttachment attachment
-    ) {
-        String encodedFilename;
-        try {
-            encodedFilename = URLEncoder.encode(
-                    attachment.getOriginalFileName(),
-                    StandardCharsets.UTF_8
-            ).replace("+", "%20");
-        } catch (Exception e) {
-            encodedFilename = attachment.getOriginalFileName()
-                    .replaceAll("[^a-zA-Z0-9._-]", "_");
-        }
-
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename*=UTF-8''" + encodedFilename)
-                .header(HttpHeaders.CONTENT_TYPE, attachment.getContentType())
-                .body(resource);
-    }
 }

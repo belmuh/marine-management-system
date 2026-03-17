@@ -8,5 +8,6 @@ public record AnnualBreakdownDto(
         List<CategoryMonthlyDataDto> categories,
         List<MonthlyTotalDto> monthlyTotals,
         BigDecimal grandTotal,
-        BigDecimal remainingMoney
+        BigDecimal remainingMoney,
+        BigDecimal carryOverBalance
 ) {}

@@ -6,8 +6,7 @@ import com.marine.management.modules.finance.domain.model.MonthlyBreakdown;
 import com.marine.management.modules.finance.domain.model.MonthlyTotal;
 import com.marine.management.modules.finance.domain.model.PeriodReport;
 import com.marine.management.modules.finance.domain.vo.Period;
-import com.marine.management.modules.finance.infrastructure.FinancialEntryRepository;
-import com.marine.management.modules.finance.infrastructure.FinancialEntryRepository.FinancialEntryProjection;
+import com.marine.management.modules.finance.infrastructure.FinancialEntryReportRepository;
 import com.marine.management.modules.finance.presentation.dto.reports.PeriodBreakdownDto;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,9 +22,9 @@ import java.util.*;
  *
  * <p>Flow:
  * <ol>
- *   <li>Fetch financial entries for period (Infrastructure)</li>
- *   <li>Calculate category breakdowns (Application)</li>
- *   <li>Calculate monthly totals (Application)</li>
+ *   <li>Fetch carry-over balance (Infrastructure)</li>
+ *   <li>Fetch category breakdowns from database (Infrastructure)</li>
+ *   <li>Fetch monthly income/expense totals (Infrastructure)</li>
  *   <li>Build domain model (Domain)</li>
  *   <li>Map to DTO (Application)</li>
  * </ol>
@@ -36,14 +35,14 @@ public class GeneratePeriodReportUseCase {
 
     private static final String DEFAULT_CURRENCY = "EUR"; // TODO: Get from tenant context
 
-    private final FinancialEntryRepository repository;
+    private final FinancialEntryReportRepository reportRepository;
     private final PeriodReportMapper periodReportMapper;
 
     public GeneratePeriodReportUseCase(
-            FinancialEntryRepository repository,
+            FinancialEntryReportRepository reportRepository,
             PeriodReportMapper periodReportMapper
     ) {
-        this.repository = Objects.requireNonNull(repository);
+        this.reportRepository = Objects.requireNonNull(reportRepository);
         this.periodReportMapper = Objects.requireNonNull(periodReportMapper);
     }
 
@@ -51,9 +50,9 @@ public class GeneratePeriodReportUseCase {
      * Generates period report for the given date range.
      *
      * @param startDate Start date of the period (not null)
-     * @param endDate End date of the period (not null)
+     * @param endDate   End date of the period (not null)
      * @return Period breakdown DTO with monthly data
-     * @throws NullPointerException if any parameter is null
+     * @throws NullPointerException     if any parameter is null
      * @throws IllegalArgumentException if period is invalid
      */
     public PeriodBreakdownDto execute(LocalDate startDate, LocalDate endDate) {
@@ -62,90 +61,113 @@ public class GeneratePeriodReportUseCase {
 
         Period period = Period.of(startDate, endDate);
 
-        // Fetch financial entries
-        List<FinancialEntryProjection> entries = repository.findByEntryDateBetweenOrderByEntryDateDesc(
-                period.startDate(),
-                period.endDate()
-        );
+        // Fetch carry-over balance: net of all approved entries before this period
+        BigDecimal carryOver = reportRepository.findCarryOverBalance(period.startDate());
 
-        // Calculate breakdowns and totals
-        List<MonthlyBreakdown> categoryBreakdowns = calculateCategoryBreakdowns(entries);
-        Map<Integer, MonthlyTotal> monthlyTotals = calculateMonthlyTotals(entries);
+        // Fetch data from database
+        List<FinancialEntryReportRepository.CategoryMonthBreakdownProjection> categoryBreakdowns =
+                reportRepository.findCategoryMonthBreakdownByPeriod(
+                        RecordType.EXPENSE, period.startDate(), period.endDate()
+                );
+
+        List<FinancialEntryReportRepository.MonthlyTotalProjection> monthlyTotals =
+                reportRepository.findMonthlyTotals(period.startDate(), period.endDate());
 
         // Build domain model
-        PeriodReport report = new PeriodReport(
-                period,
-                categoryBreakdowns,
-                monthlyTotals,
-                DEFAULT_CURRENCY
-        );
+        PeriodReport report = buildPeriodReport(period, categoryBreakdowns, monthlyTotals, carryOver);
 
         // Map to DTO
         return periodReportMapper.toDto(report);
     }
 
     /**
-     * Calculates category breakdowns grouped by month.
+     * Builds PeriodReport domain model from infrastructure projections.
      */
-    private List<MonthlyBreakdown> calculateCategoryBreakdowns(
-            List<FinancialEntryProjection> entries
+    private PeriodReport buildPeriodReport(
+            Period period,
+            List<FinancialEntryReportRepository.CategoryMonthBreakdownProjection> categoryBreakdowns,
+            List<FinancialEntryReportRepository.MonthlyTotalProjection> monthlyTotals,
+            BigDecimal carryOver
     ) {
-        Map<String, Map<Integer, BigDecimal>> categoryMonthTotals = new HashMap<>();
+        List<MonthlyBreakdown> breakdowns = buildCategoryBreakdowns(categoryBreakdowns);
+        Map<Integer, MonthlyTotal> totalsMap = buildMonthlyTotals(monthlyTotals, carryOver);
 
-        for (FinancialEntryProjection entry : entries) {
-            String category = entry.getCategoryName();
-            Integer month = entry.getEntryDate().getMonthValue();
-            BigDecimal amount = entry.getBaseAmount();
+        return new PeriodReport(
+                period,
+                breakdowns,
+                totalsMap,
+                DEFAULT_CURRENCY,
+                carryOver
+        );
+    }
 
-            categoryMonthTotals
-                    .computeIfAbsent(category, k -> new HashMap<>())
-                    .merge(month, amount, BigDecimal::add);
+    /**
+     * Builds category breakdowns grouped by month from infrastructure projections.
+     */
+    private List<MonthlyBreakdown> buildCategoryBreakdowns(
+            List<FinancialEntryReportRepository.CategoryMonthBreakdownProjection> projections
+    ) {
+        Map<String, Map<Integer, BigDecimal>> categoryMonthValues = new HashMap<>();
+
+        for (var projection : projections) {
+            String categoryName = projection.getCategoryName();
+            Integer month = projection.getMonth();
+            BigDecimal amount = projection.getTotal();
+
+            categoryMonthValues
+                    .computeIfAbsent(categoryName, k -> new HashMap<>())
+                    .put(month, amount);
         }
 
-        return categoryMonthTotals.entrySet().stream()
-                .map(e -> {
-                    String categoryName = e.getKey();
-                    Map<Integer, BigDecimal> monthlyValues = e.getValue();
-                    BigDecimal yearTotal = sumMonthlyValues(monthlyValues);
+        return categoryMonthValues.entrySet().stream()
+                .map(entry -> {
+                    String categoryName = entry.getKey();
+                    Map<Integer, BigDecimal> monthlyValues = entry.getValue();
+                    BigDecimal periodTotal = sumMonthlyValues(monthlyValues);
 
-                    return new MonthlyBreakdown(categoryName, monthlyValues, yearTotal);
+                    return new MonthlyBreakdown(categoryName, monthlyValues, periodTotal);
                 })
                 .sorted(Comparator.comparing(MonthlyBreakdown::categoryName))
                 .toList();
     }
 
     /**
-     * Calculates monthly totals with cumulative balance.
+     * Builds monthly totals with cumulative balance.
+     *
+     * @param carryOver net balance of all approved entries before this period
      */
-    private Map<Integer, MonthlyTotal> calculateMonthlyTotals(
-            List<FinancialEntryProjection> entries
+    private Map<Integer, MonthlyTotal> buildMonthlyTotals(
+            List<FinancialEntryReportRepository.MonthlyTotalProjection> projections,
+            BigDecimal carryOver
     ) {
         Map<Integer, BigDecimal> incomeByMonth = new HashMap<>();
         Map<Integer, BigDecimal> expenseByMonth = new HashMap<>();
 
-        for (FinancialEntryProjection entry : entries) {
-            Integer month = entry.getEntryDate().getMonthValue();
-            BigDecimal amount = entry.getBaseAmount();
+        for (var projection : projections) {
+            Integer month = projection.getMonth();
+            BigDecimal total = projection.getTotal();
 
-            if (entry.getEntryType() == RecordType.INCOME) {
-                incomeByMonth.merge(month, amount, BigDecimal::add);
+            if (projection.getEntryType() == RecordType.INCOME) {
+                incomeByMonth.put(month, total);
             } else {
-                expenseByMonth.merge(month, amount, BigDecimal::add);
+                expenseByMonth.put(month, total);
             }
         }
 
-        return buildMonthlyTotalsMap(incomeByMonth, expenseByMonth);
+        return buildMonthlyTotalsMap(incomeByMonth, expenseByMonth, carryOver);
     }
 
     /**
-     * Builds monthly totals map with cumulative balance.
+     * Calculates cumulative balance for each month, starting from carry-over balance.
+     * carryOver = net income - expense for all approved entries before this period.
      */
     private Map<Integer, MonthlyTotal> buildMonthlyTotalsMap(
             Map<Integer, BigDecimal> incomeByMonth,
-            Map<Integer, BigDecimal> expenseByMonth
+            Map<Integer, BigDecimal> expenseByMonth,
+            BigDecimal carryOver
     ) {
         Map<Integer, MonthlyTotal> totals = new HashMap<>();
-        BigDecimal cumulative = BigDecimal.ZERO;
+        BigDecimal cumulative = carryOver;
 
         for (int month = 1; month <= 12; month++) {
             BigDecimal income = incomeByMonth.getOrDefault(month, BigDecimal.ZERO);

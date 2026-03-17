@@ -224,19 +224,37 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
 
     @Query("""
         SELECT c.id as categoryId,
-               c.name as categoryName, 
-               EXTRACT(MONTH FROM e.entryDate) as month, 
-               SUM(e.baseAmount.amount) as total 
-        FROM FinancialEntry e 
+               c.name as categoryName,
+               EXTRACT(MONTH FROM e.entryDate) as month,
+               SUM(e.baseAmount.amount) as total
+        FROM FinancialEntry e
         JOIN e.category c
-        WHERE e.entryType = :entryType 
-        AND EXTRACT(YEAR FROM e.entryDate) = :year 
-        GROUP BY c.id, c.name, EXTRACT(MONTH FROM e.entryDate) 
+        WHERE e.entryType = :entryType
+        AND EXTRACT(YEAR FROM e.entryDate) = :year
+        GROUP BY c.id, c.name, EXTRACT(MONTH FROM e.entryDate)
         ORDER BY c.name, month
     """)
     List<CategoryMonthBreakdownProjection> findCategoryMonthBreakdown(
             @Param("entryType") RecordType entryType,
             @Param("year") int year
+    );
+
+    @Query("""
+        SELECT c.id as categoryId,
+               c.name as categoryName,
+               EXTRACT(MONTH FROM e.entryDate) as month,
+               SUM(e.baseAmount.amount) as total
+        FROM FinancialEntry e
+        JOIN e.category c
+        WHERE e.entryType = :entryType
+        AND e.entryDate BETWEEN :start AND :end
+        GROUP BY c.id, c.name, EXTRACT(MONTH FROM e.entryDate)
+        ORDER BY c.name, month
+    """)
+    List<CategoryMonthBreakdownProjection> findCategoryMonthBreakdownByPeriod(
+            @Param("entryType") RecordType entryType,
+            @Param("start") LocalDate start,
+            @Param("end") LocalDate end
     );
 
     @Query("""
@@ -274,10 +292,25 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
     // AGGREGATES
     // ============================================
 
+    /**
+     * Carry-over balance: net income - expense for all approved entries before the given date.
+     * Used as the starting cumulative balance for annual/period reports.
+     */
     @Query("""
-        SELECT COALESCE(SUM(e.baseAmount.amount), 0) 
-        FROM FinancialEntry e 
-        WHERE e.entryType = :entryType 
+        SELECT COALESCE(SUM(
+            CASE WHEN e.entryType = 'INCOME' THEN e.baseAmount.amount
+                 ELSE -e.baseAmount.amount END
+        ), 0)
+        FROM FinancialEntry e
+        WHERE e.entryDate < :before
+       /* AND e.status IN ('APPROVED', 'PAID', 'PARTIALLY_PAID')*/
+    """)
+    BigDecimal findCarryOverBalance(@Param("before") LocalDate before);
+
+    @Query("""
+        SELECT COALESCE(SUM(e.baseAmount.amount), 0)
+        FROM FinancialEntry e
+        WHERE e.entryType = :entryType
         AND e.entryDate BETWEEN :start AND :end
     """)
     BigDecimal sumByEntryTypeAndDateRange(

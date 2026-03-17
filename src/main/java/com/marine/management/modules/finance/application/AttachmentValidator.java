@@ -27,6 +27,7 @@ public class AttachmentValidator {
         validateNotEmpty(file);
         validateFileSize(file);
         validateFileType(file);
+        validateFileExtension(file);
     }
 
     /**
@@ -70,6 +71,14 @@ public class AttachmentValidator {
         if (!fileStorageService.isAllowedFileType(file.getContentType())) {
             throw new IllegalArgumentException(
                     String.format("File type '%s' is not allowed", file.getContentType())
+            );
+        }
+    }
+
+    private void validateFileExtension(MultipartFile file) {
+        if (!fileStorageService.isAllowedExtension(file.getOriginalFilename())) {
+            throw new IllegalArgumentException(
+                    String.format("File extension is not allowed: '%s'", file.getOriginalFilename())
             );
         }
     }

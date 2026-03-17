@@ -8,7 +8,7 @@ public record PeriodBreakdownDto(
         String endDate,
         List<CategoryMonthlyDataDto> categories,
         List<MonthlyTotalDto> monthlyTotals,
-        BigDecimal totalIncome,
-        BigDecimal totalExpense,
-        BigDecimal cumulative
+        BigDecimal grandTotal,
+        BigDecimal remainingMoney,
+        BigDecimal carryOverBalance
 ) {}

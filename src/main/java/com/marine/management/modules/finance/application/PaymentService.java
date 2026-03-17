@@ -32,7 +32,7 @@ public class PaymentService {
 
     private final FinancialEntryRepository entryRepository;
     private final PaymentRepository paymentRepository;
-    private final EntryAccessPolicy accessPolicy;  // 🆕
+    private final EntryAccessPolicy accessPolicy;  // 
 
     public PaymentService(
             FinancialEntryRepository entryRepository,
@@ -69,14 +69,14 @@ public class PaymentService {
         FinancialEntry entry = findEntryOrThrow(entryId);
 
         // Entry must be payable (APPROVED or PARTIALLY_PAID)
-        if (!entry.getStatus().isPayable()) {  // 🆕 isPayable() kullan
+        if (!entry.getStatus().isPayable()) {  //  isPayable() kullan
             throw new IllegalStateException(
                     String.format("Entry must be APPROVED or PARTIALLY_PAID to record payment. Current status: %s",
                             entry.getStatus())
             );
         }
 
-        // Create payment record
+        // Create payment record and add to entry (cascade handles persistence)
         Payment payment = Payment.create(
                 entry,
                 amount,
@@ -87,10 +87,9 @@ public class PaymentService {
                 recorder
         );
 
-        paymentRepository.save(payment);
-
-        // Update entry paid amount (this auto-updates status)
-        entry.recordPayment(amount);  // 🆕 User parametresi kaldırıldı
+        // addPayment() adds to collection + updates paidBaseAmount/status via recordPayment()
+        entry.addPayment(payment);
+        entryRepository.save(entry);
 
         logger.info("Payment recorded: entry={}, amount={}, date={}, status={}, by={}",
                 entryId, amount, paymentDate, entry.getStatus(), recorder.getUsername());
@@ -140,13 +139,13 @@ public class PaymentService {
         guardTenantContext();
         verifyUserBelongsToCurrentTenant(updater);
 
-        if (!updater.getRoleEnum().hasPermission(Permission.PAYMENT_EDIT)) {  // 🆕
+        if (!updater.getRoleEnum().hasPermission(Permission.PAYMENT_EDIT)) {  // 
             throw new AccessDeniedException("User does not have permission to update payments");
         }
 
         Payment payment = findPaymentOrThrow(paymentId);
 
-        payment.updateDetails(paymentReference, paymentMethod, notes);  // 🆕 User kaldırıldı
+        payment.updateDetails(paymentReference, paymentMethod, notes);  //  User kaldırıldı
 
         logger.info("Payment updated: id={}, by={}", paymentId, updater.getUsername());
 
@@ -163,19 +162,16 @@ public class PaymentService {
         verifyUserBelongsToCurrentTenant(deleter);
 
         // Only users with PAYMENT_DELETE permission can delete
-        if (!deleter.getRoleEnum().hasPermission(Permission.PAYMENT_DELETE)) {  // 🆕
+        if (!deleter.getRoleEnum().hasPermission(Permission.PAYMENT_DELETE)) { 
             throw new AccessDeniedException("User does not have permission to delete payments");
         }
 
         Payment payment = findPaymentOrThrow(paymentId);
         FinancialEntry entry = payment.getEntry();
 
-        // Reverse payment on entry
-        Money reversalAmount = payment.getAmount().negate();
-        entry.recordPayment(reversalAmount);  // 🆕 User kaldırıldı
-
-        // Delete payment record
-        paymentRepository.delete(payment);
+        // removePayment() removes from collection + reverses paidBaseAmount/status
+        entry.removePayment(payment);
+        entryRepository.save(entry);
 
         logger.warn("Payment deleted (REVERSAL): id={}, entry={}, amount={}, by={}",
                 paymentId, entry.getEntryNumber(), payment.getAmount(), deleter.getUsername());
@@ -192,7 +188,7 @@ public class PaymentService {
 
         // Access control - user must be able to view the entry
         FinancialEntry entry = findEntryOrThrow(entryId);
-        accessPolicy.checkReadAccess(entry, currentUser);  // 🆕
+        accessPolicy.checkReadAccess(entry, currentUser);  // 
 
         return paymentRepository.findByEntry_IdOrderByPaymentDateDesc(entryId)
                 .stream()
@@ -237,7 +233,7 @@ public class PaymentService {
         guardTenantContext();
 
         FinancialEntry entry = findEntryOrThrow(entryId);
-        accessPolicy.checkReadAccess(entry, currentUser);  // 🆕
+        accessPolicy.checkReadAccess(entry, currentUser);  // 
 
         BigDecimal totalPaidAmount = paymentRepository.sumPaymentsByEntryId(entryId);
 

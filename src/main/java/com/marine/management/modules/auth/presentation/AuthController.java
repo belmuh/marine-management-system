@@ -122,15 +122,14 @@ public class AuthController {
             @RequestBody RefreshTokenRequest request
     ) {
         try {
-            // Validate refresh token and get user
             User user = refreshTokenService.validateRefreshToken(request.refreshToken());
-
-            // Generate new access token
             String newAccessToken = jwtUtil.generateToken(user);
 
+            // Permission'ları da gönder — role değişmiş olabilir
             RefreshTokenResponse response = new RefreshTokenResponse(
                     newAccessToken,
-                    jwtUtil.getExpirationMs()
+                    jwtUtil.getExpirationMs(),
+                    user.getRoleEnum().getPermissionNames()
             );
 
             return ResponseEntity.ok(response);

@@ -131,6 +131,16 @@ public enum Role {
     }
 
     /**
+     * Returns all permission names (String) for this role including inherited.
+     * Use in auth responses instead of repeating the stream/map/collect chain.
+     */
+    public Set<String> getPermissionNames() {
+        return getAllPermissions().stream()
+                .map(Permission::name)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+    }
+
+    /**
      * Get only this role's own permissions (not inherited).
      */
     public Set<Permission> getOwnPermissions() {

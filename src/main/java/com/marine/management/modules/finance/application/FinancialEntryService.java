@@ -277,9 +277,10 @@ public class FinancialEntryService {
         FinancialEntry entry = findEntryOrThrow(command.entryId());
         accessPolicy.checkDeleteAccess(entry, command.user());
 
-        entryRepository.delete(entry);
+        entry.softDelete(command.user());
+        entryRepository.save(entry);
 
-        logger.info("Entry deleted: id={}", command.entryId());
+        logger.info("Entry soft-deleted: id={}, by={}", command.entryId(), command.user().getUsername());
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

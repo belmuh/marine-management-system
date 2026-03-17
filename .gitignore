@@ -42,6 +42,7 @@ logs/
 ### Sensitive Files ###
 application-local.properties
 application-dev.properties
+application-prod.properties
 
 ### VS Code ###
 .vscode/

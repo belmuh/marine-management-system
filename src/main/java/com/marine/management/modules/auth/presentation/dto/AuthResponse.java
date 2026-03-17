@@ -3,14 +3,16 @@ package com.marine.management.modules.auth.presentation.dto;
 import com.marine.management.modules.auth.presentation.UserResponse;
 import com.marine.management.modules.users.domain.User;
 
+import java.util.Set;
+
 public record AuthResponse(
         UserResponse user,
         String accessToken,
         String refreshToken,
         long accessTokenExpiry,
-        long refreshTokenExpiry
+        long refreshTokenExpiry,
+        Set<String> permissions
 ) {
-    // Factory method - User entity'den oluştur
     public static AuthResponse from(User user, String accessToken, String refreshToken,
                                     long accessTokenExpiry, long refreshTokenExpiry) {
         return new AuthResponse(
@@ -18,7 +20,8 @@ public record AuthResponse(
                 accessToken,
                 refreshToken,
                 accessTokenExpiry,
-                refreshTokenExpiry
+                refreshTokenExpiry,
+                user.getRoleEnum().getPermissionNames()
         );
     }
 }

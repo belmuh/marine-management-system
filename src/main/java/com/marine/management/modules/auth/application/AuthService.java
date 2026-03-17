@@ -56,7 +56,7 @@ public class AuthService {
      */
     @Transactional
     public AuthResult login(LoginCommand command, String ipAddress, String userAgent) {
-        // ⭐ CLEAN: command.username() contains email
+        //  CLEAN: command.username() contains email
         User user = findUserByEmail(command.username());
 
         if (!user.isActive()) {
@@ -83,7 +83,7 @@ public class AuthService {
                 userAgent
         ).getToken();
 
-        return new AuthResult(
+        return AuthResult.from(
                 accessToken,
                 refreshToken,
                 user,

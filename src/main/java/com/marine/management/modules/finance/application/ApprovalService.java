@@ -61,7 +61,7 @@ public class ApprovalService {
 
     /**
      * Get pending items for user based on their role.
-     * - CREW: Own DRAFT and REJECTED
+     * - CREW: Own DRAFT entries only (REJECTED is a final state — no resubmit)
      * - MANAGER: PENDING_MANAGER
      * - CAPTAIN: PENDING_CAPTAIN + PENDING_MANAGER
      */

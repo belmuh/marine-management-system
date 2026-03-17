@@ -186,6 +186,16 @@ public class FinancialEntry extends BaseTenantEntity {
     @OneToMany(mappedBy = "entry", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<FinancialEntryAttachment> attachments = new ArrayList<>();
 
+    // Payments — Aggregate child. Mutations go through entry, not PaymentRepository.
+    @NotAudited
+    @OneToMany(mappedBy = "entry", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Payment> payments = new ArrayList<>();
+
+    // Approval history — immutable audit trail, never physically deleted.
+    @NotAudited
+    @OneToMany(mappedBy = "entry", cascade = {CascadeType.PERSIST, CascadeType.MERGE})
+    private List<EntryApproval> approvals = new ArrayList<>();
+
     protected FinancialEntry() {}
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -393,6 +403,62 @@ public class FinancialEntry extends BaseTenantEntity {
         }
     }
 
+    // delete payment - used for payment reversals or corrections
+    public void reversePayment(Money paymentAmount) {
+        Objects.requireNonNull(paymentAmount, "Payment amount cannot be null");
+
+        if (!paymentAmount.getCurrencyCode().equals(BASE_CURRENCY)) {
+            throw new IllegalArgumentException("Payment amount must be in base currency (EUR)");
+        }
+
+        if (!this.status.allowsPaymentReversal()) {
+            throw new IllegalStateException(
+                    String.format("Cannot reverse payment for entry with status: %s", this.status)
+            );
+        }
+
+        Money newPaidAmount = this.paidBaseAmount.subtract(paymentAmount);
+
+        if (newPaidAmount.isNegative()) {
+            throw new IllegalStateException("Reversed amount cannot exceed total paid amount");
+        }
+
+        this.paidBaseAmount = newPaidAmount;
+
+        if (newPaidAmount.isZero()) {
+            this.status = EntryStatus.APPROVED;
+        } else {
+            this.status = EntryStatus.PARTIALLY_PAID;
+        }
+    }
+
+    /**
+     * Add a payment to this entry's collection (Aggregate Root management).
+     * Also updates paidBaseAmount and status via recordPayment().
+     * Call this instead of paymentRepository.save() directly.
+     *
+     * Note: Payment.create(entry, ...) already sets payment.entry = entry (owning side).
+     * No separate associateWithEntry() needed — unlike Attachment pattern.
+     */
+    public void addPayment(Payment payment) {
+        Objects.requireNonNull(payment, "Payment cannot be null");
+        payments.add(payment);
+        recordPayment(payment.getAmount());
+    }
+
+    /**
+     * Remove a payment from this entry's collection (Aggregate Root management).
+     * Also reverses paidBaseAmount and status via reversePayment().
+     * Call this instead of paymentRepository.delete() directly.
+     * orphanRemoval = true handles physical deletion via cascade.
+     */
+    public void removePayment(Payment payment) {
+        Objects.requireNonNull(payment, "Payment cannot be null");
+        if (payments.remove(payment)) {
+            reversePayment(payment.getAmount());
+        }
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // UPDATE METHODS
     // ═══════════════════════════════════════════════════════════════════════════
@@ -492,15 +558,12 @@ public class FinancialEntry extends BaseTenantEntity {
 
     public void addAttachment(FinancialEntryAttachment attachment) {
         Objects.requireNonNull(attachment, "Attachment cannot be null");
-        if (attachments == null) {
-            attachments = new ArrayList<>();
-        }
         attachments.add(attachment);
         attachment.associateWithEntry(this);
     }
 
     public void removeAttachment(FinancialEntryAttachment attachment) {
-        if (attachments != null && attachments.remove(attachment)) {
+        if (attachments.remove(attachment)) {
             attachment.dissociateFromEntry();
         }
     }
@@ -671,7 +734,15 @@ public class FinancialEntry extends BaseTenantEntity {
     public String getRejectionReason() { return rejectionReason; }
 
     public List<FinancialEntryAttachment> getAttachments() {
-        return attachments != null ? List.copyOf(attachments) : List.of();
+        return List.copyOf(attachments);
+    }
+
+    public List<Payment> getPayments() {
+        return List.copyOf(payments);
+    }
+
+    public List<EntryApproval> getApprovals() {
+        return List.copyOf(approvals);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
