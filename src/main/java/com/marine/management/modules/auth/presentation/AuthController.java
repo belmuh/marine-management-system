@@ -2,6 +2,7 @@
 package com.marine.management.modules.auth.presentation;
 
 import com.marine.management.modules.auth.application.AuthService;
+import com.marine.management.modules.auth.application.PasswordResetService;
 import com.marine.management.modules.auth.application.RefreshTokenService;
 import com.marine.management.modules.auth.application.RegistrationService;
 import com.marine.management.modules.auth.domain.commands.AuthResult;
@@ -43,17 +44,20 @@ public class AuthController {
     private final RefreshTokenService refreshTokenService;
     private final JwtUtil jwtUtil;
     private final RegistrationService registrationService;
+    private final PasswordResetService passwordResetService;
 
     public AuthController(
             AuthService authService,
             RefreshTokenService refreshTokenService,
             JwtUtil jwtUtil,
-            RegistrationService registrationService
+            RegistrationService registrationService,
+            PasswordResetService passwordResetService
     ) {
         this.authService = authService;
         this.refreshTokenService = refreshTokenService;
         this.jwtUtil = jwtUtil;
         this.registrationService = registrationService;
+        this.passwordResetService = passwordResetService;
     }
 
     /**
@@ -205,6 +209,62 @@ public class AuthController {
                 "message", "Email verified successfully. You can now log in.",
                 "verified", true
         ));
+    }
+
+    /**
+     * Request a password reset link.
+     *
+     * Generates a one-time token and sends it to the user's email.
+     * Always responds with 200 OK to prevent user enumeration attacks.
+     *
+     * PUBLIC: No authentication required.
+     */
+    @PostMapping("/forgot-password")
+    @PublicEndpoint(reason = "Password reset request - generates reset token")
+    public ResponseEntity<Map<String, String>> forgotPassword(
+            @RequestBody Map<String, String> request
+    ) {
+        String email = request.get("email");
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Email is required"));
+        }
+
+        passwordResetService.requestPasswordReset(email);
+
+        // Always return the same message — prevents user enumeration attacks
+        return ResponseEntity.ok(Map.of(
+                "message", "If that email address is registered, you will receive a password reset link shortly."
+        ));
+    }
+
+    /**
+     * Reset password using a valid reset token.
+     *
+     * Validates the token, updates the password, and clears the token.
+     * Token is single-use and expires in 1 hour.
+     *
+     * PUBLIC: No authentication required.
+     */
+    @PostMapping("/reset-password")
+    @PublicEndpoint(reason = "Password reset - validates token and updates password")
+    public ResponseEntity<Map<String, String>> resetPassword(
+            @RequestBody Map<String, String> request
+    ) {
+        String token = request.get("token");
+        String newPassword = request.get("password");
+
+        if (token == null || token.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Reset token is required"));
+        }
+
+        try {
+            passwordResetService.resetPassword(token, newPassword);
+            return ResponseEntity.ok(Map.of("message", "Password reset successfully. You can now log in."));
+        } catch (PasswordResetService.InvalidPasswordResetTokenException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
     }
 
     /**

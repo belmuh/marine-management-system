@@ -40,6 +40,12 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      */
     Optional<User> findByVerificationToken(String verificationToken);
 
+    /**
+     * Find user by password reset token (used for password reset flow).
+     * Global lookup — reset tokens are unique across the system.
+     */
+    Optional<User> findByPasswordResetToken(String passwordResetToken);
+
     // ============================================
     // TENANT-SCOPED QUERIES
     // ============================================

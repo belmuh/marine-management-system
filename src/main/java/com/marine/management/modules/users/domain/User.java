@@ -69,6 +69,12 @@ public class User extends BaseAuditedEntity implements UserDetails, TenantAwareU
     @Column(name = "verification_token_expires_at")
     private LocalDateTime verificationTokenExpiresAt;
 
+    @Column(name = "password_reset_token", length = 100)
+    private String passwordResetToken;
+
+    @Column(name = "password_reset_token_expires_at")
+    private LocalDateTime passwordResetTokenExpiresAt;
+
     protected User() {}
 
     private User(String email, String password, Role role, Organization organization) {
@@ -269,6 +275,36 @@ public class User extends BaseAuditedEntity implements UserDetails, TenantAwareU
         this.emailVerified = true;
         this.verificationToken = null;
         this.verificationTokenExpiresAt = null;
+    }
+
+    /**
+     * Generate a one-time password reset token, valid for 1 hour.
+     * Replaces any existing token (previous link becomes invalid).
+     */
+    public String generatePasswordResetToken() {
+        this.passwordResetToken = UUID.randomUUID().toString();
+        this.passwordResetTokenExpiresAt = LocalDateTime.now().plusHours(1);
+        return this.passwordResetToken;
+    }
+
+    /**
+     * Consume the reset token: update password and clear token fields.
+     * Must be called only after isPasswordResetTokenValid() returns true.
+     */
+    public void resetPassword(String newHashedPassword) {
+        this.password = Objects.requireNonNull(newHashedPassword, "Password cannot be null");
+        this.passwordResetToken = null;
+        this.passwordResetTokenExpiresAt = null;
+    }
+
+    public boolean isPasswordResetTokenValid() {
+        return passwordResetToken != null
+            && passwordResetTokenExpiresAt != null
+            && passwordResetTokenExpiresAt.isAfter(LocalDateTime.now());
+    }
+
+    public String getPasswordResetToken() {
+        return passwordResetToken;
     }
 
     public boolean isVerificationTokenValid() {

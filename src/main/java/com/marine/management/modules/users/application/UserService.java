@@ -28,18 +28,15 @@ public class UserService {
     private final UserRepository userRepository;
     private final OrganizationRepository organizationRepository;
     private final PasswordEncoder passwordEncoder;
-    private final RefreshTokenRepository refreshTokenRepository;
 
     public UserService(
             UserRepository userRepository,
             OrganizationRepository organizationRepository,
-            PasswordEncoder passwordEncoder,
-            RefreshTokenRepository refreshTokenRepository
+            PasswordEncoder passwordEncoder
     ) {
         this.userRepository = userRepository;
         this.organizationRepository = organizationRepository;
         this.passwordEncoder = passwordEncoder;
-        this.refreshTokenRepository = refreshTokenRepository;
     }
 
     // ============================================
@@ -239,9 +236,7 @@ public class UserService {
         user.changeRole(newRole);
         User saved = userRepository.save(user);
 
-        // Invalidate refresh tokens so next login issues a JWT with the new role
-        refreshTokenRepository.deleteByUserId(userId);
-        log.info("Refresh tokens invalidated for user {} after role change to {}", userId, newRole);
+        log.info("Role changed for user {} to {}", userId, newRole);
 
         return saved;
     }
