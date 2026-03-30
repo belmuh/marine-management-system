@@ -63,6 +63,10 @@ public class AuthService {
             throw new AuthenticationFailedException("User account is disabled");
         }
 
+        if (!user.isEmailVerified()) {
+            throw new AuthenticationFailedException("Email not verified. Please check your inbox for the verification link.");
+        }
+
         boolean authenticated = authenticate(user, command.password());
 
         if (!authenticated) {

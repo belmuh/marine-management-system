@@ -6,7 +6,16 @@ CREATE TABLE organizations (
     flag_country VARCHAR(2) NOT NULL,
     base_currency VARCHAR(3) NOT NULL,
     yacht_type VARCHAR(50),
+    yacht_length INTEGER,
+    home_marina VARCHAR(200),
+    current_location VARCHAR(200),
+    timezone VARCHAR(50) NOT NULL DEFAULT 'Europe/Istanbul',
+    financial_year_start_month INTEGER NOT NULL DEFAULT 1,
     subscription_status VARCHAR(20) NOT NULL,
+    subscription_expires_at DATE,
+    active BOOLEAN NOT NULL DEFAULT true,
+    manager_approval_enabled BOOLEAN NOT NULL DEFAULT false,
+    approval_limit NUMERIC(15,2),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

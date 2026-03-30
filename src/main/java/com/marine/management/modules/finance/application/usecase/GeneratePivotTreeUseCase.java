@@ -1,6 +1,7 @@
 package com.marine.management.modules.finance.application.usecase;
 
 import com.marine.management.modules.finance.application.dto.PivotTreeReportResponse;
+import com.marine.management.modules.finance.domain.enums.EntryStatus;
 import com.marine.management.modules.finance.domain.enums.RecordType;
 import com.marine.management.modules.finance.domain.model.PivotReportProjection;
 import com.marine.management.modules.finance.domain.service.PivotReportBuilder;
@@ -58,7 +59,8 @@ public class GeneratePivotTreeUseCase {
         // Fetch pivot projections
         List<PivotReportProjection> projections = reportRepository.findPivotProjections(
                 entryType,
-                year
+                year,
+                EntryStatus.ACTUAL_STATUSES
         );
 
         // Build pivot tree structure

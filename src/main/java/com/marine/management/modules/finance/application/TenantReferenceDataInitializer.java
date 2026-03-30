@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * Initializes tenant-specific reference data on new tenant registration.
@@ -46,76 +47,104 @@ public class TenantReferenceDataInitializer {
 
     /**
      * Initialize all reference data for current tenant.
-     * Called during registration.
+     * Called during registration. Enables all by default.
      *
      * ⚠️ REQUIRES: TenantContext must be set before calling!
      */
     @Transactional
     public void initializeTenantReferenceData() {
-        // Get tenantId from context (will throw if not set)
+        initializeTenantReferenceData(null, null);
+    }
+
+    /**
+     * Initialize reference data for current tenant with optional selections.
+     *
+     * @param selectedMainCategoryIds IDs of main categories to enable (null = enable all)
+     * @param selectedWhoIds IDs of WHO entries to enable (null = enable all)
+     *
+     * ⚠️ REQUIRES: TenantContext must be set before calling!
+     */
+    @Transactional
+    public void initializeTenantReferenceData(Set<Long> selectedMainCategoryIds, Set<Long> selectedWhoIds) {
         Long tenantId = TenantContext.getCurrentTenantId();
 
-        logger.info("🔄 Initializing reference data for tenant: {}", tenantId);
+        logger.info("Initializing reference data for tenant: {}", tenantId);
 
-        initializeMainCategories();
-        initializeWhoSelections();
+        initializeMainCategories(selectedMainCategoryIds);
+        initializeWhoSelections(selectedWhoIds);
 
-        logger.info(" Reference data initialization completed for tenant: {}", tenantId);
+        logger.info("Reference data initialization completed for tenant: {}", tenantId);
     }
 
     /**
      * Copy all global MainCategory entries to tenant-specific records.
-     * All categories start as INACTIVE - user selects during onboarding.
+     * If selectedIds is provided, only those are enabled; others are disabled.
+     * If selectedIds is null, all are enabled.
      */
-    private void initializeMainCategories() {
+    private void initializeMainCategories(Set<Long> selectedIds) {
         List<MainCategory> globalCategories = mainCategoryRepository.findAll();
 
-        logger.info("📦 Found {} global MainCategories for tenant: {}",
+        logger.info("Found {} global MainCategories for tenant: {}",
                 globalCategories.size(), TenantContext.getCurrentTenantId());
 
         if (globalCategories.isEmpty()) {
-            logger.warn("⚠️ No global MainCategories found! Skipping tenant initialization.");
+            logger.warn("No global MainCategories found! Skipping tenant initialization.");
             return;
         }
 
-        //  Create all tenant categories in batch
+        boolean enableAll = selectedIds == null || selectedIds.isEmpty();
+
         List<TenantMainCategory> tenantCategories = globalCategories.stream()
-                .map(TenantMainCategory::create)
+                .map(mc -> {
+                    TenantMainCategory tmc = TenantMainCategory.create(mc);
+                    if (!enableAll && !selectedIds.contains(mc.getId())) {
+                        tmc.disable();
+                    }
+                    return tmc;
+                })
                 .toList();
 
-        //  Save all at once
         tenantMainCategoryRepository.saveAll(tenantCategories);
-        tenantMainCategoryRepository.flush(); // Force immediate write
+        tenantMainCategoryRepository.flush();
 
-        logger.info(" Created {} TenantMainCategory records for tenant: {}",
-                tenantCategories.size(), TenantContext.getCurrentTenantId());
+        long enabledCount = tenantCategories.stream().filter(TenantMainCategory::isEnabled).count();
+        logger.info("Created {} TenantMainCategory records ({} enabled) for tenant: {}",
+                tenantCategories.size(), enabledCount, TenantContext.getCurrentTenantId());
     }
 
     /**
      * Copy all global WHO entries to tenant-specific records.
-     * All WHO selections start as INACTIVE - user selects during onboarding.
+     * If selectedIds is provided, only those are enabled; others are disabled.
+     * If selectedIds is null, all are enabled.
      */
-    private void initializeWhoSelections() {
+    private void initializeWhoSelections(Set<Long> selectedIds) {
         List<Who> globalWhoList = whoRepository.findAll();
 
-        logger.info("📦 Found {} global WHO records for tenant: {}",
+        logger.info("Found {} global WHO records for tenant: {}",
                 globalWhoList.size(), TenantContext.getCurrentTenantId());
 
         if (globalWhoList.isEmpty()) {
-            logger.warn("⚠️ No global WHO records found! Skipping tenant initialization.");
+            logger.warn("No global WHO records found! Skipping tenant initialization.");
             return;
         }
 
-        //  Create all tenant WHO selections in batch
+        boolean enableAll = selectedIds == null || selectedIds.isEmpty();
+
         List<TenantWhoSelection> tenantWhoSelections = globalWhoList.stream()
-                .map(TenantWhoSelection::create)
+                .map(w -> {
+                    TenantWhoSelection tws = TenantWhoSelection.create(w);
+                    if (!enableAll && !selectedIds.contains(w.getId())) {
+                        tws.disable();
+                    }
+                    return tws;
+                })
                 .toList();
 
-        //  Save all at once
         tenantWhoSelectionRepository.saveAll(tenantWhoSelections);
-        tenantWhoSelectionRepository.flush(); // Force immediate write
+        tenantWhoSelectionRepository.flush();
 
-        logger.info(" Created {} TenantWhoSelection records for tenant: {}",
-                tenantWhoSelections.size(), TenantContext.getCurrentTenantId());
+        long enabledCount = tenantWhoSelections.stream().filter(TenantWhoSelection::isEnabled).count();
+        logger.info("Created {} TenantWhoSelection records ({} enabled) for tenant: {}",
+                tenantWhoSelections.size(), enabledCount, TenantContext.getCurrentTenantId());
     }
 }

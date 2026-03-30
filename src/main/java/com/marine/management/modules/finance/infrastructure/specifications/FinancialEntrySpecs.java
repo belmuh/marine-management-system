@@ -44,6 +44,31 @@ public class FinancialEntrySpecs {
         };
     }
 
+    /**
+     * Role-based visibility filter for financial reports and dashboard.
+     *
+     * Unlike forUser() which controls the approval queue,
+     * this controls what financial data a user can see in reports:
+     *
+     *   CREW         → only their own entries
+     *   CAPTAIN      → all entries (vessel overview)
+     *   MANAGER      → all entries (financial control)
+     *   ADMIN        → all entries
+     *   SUPER_ADMIN  → all entries
+     *
+     * Note: tenant isolation is always enforced by Hibernate @Filter
+     * regardless of what this method returns.
+     */
+    public static Specification<FinancialEntry> forFinancialReports(User user) {
+        if (user == null) {
+            return null;
+        }
+        return switch (user.getRoleEnum()) {
+            case CREW                                      -> createdBy(user.getUserId());
+            case CAPTAIN, MANAGER, ADMIN, SUPER_ADMIN     -> null;
+        };
+    }
+
     public static Specification<FinancialEntry> createdBy(UUID userId) {
         return (root, query, cb) -> {
             if (userId == null) return null;
@@ -79,12 +104,12 @@ public class FinancialEntrySpecs {
         };
     }
 
-    public static Specification<FinancialEntry> approved() {
-        return statusIn(Set.of(EntryStatus.APPROVED, EntryStatus.PARTIALLY_PAID, EntryStatus.PAID));
+    public static Specification<FinancialEntry> actualEntries() {
+        return statusIn(EntryStatus.ACTUAL_STATUSES);
     }
 
-    public static Specification<FinancialEntry> pendingApproval() {
-        return statusIn(Set.of(EntryStatus.PENDING_CAPTAIN, EntryStatus.PENDING_MANAGER));
+    public static Specification<FinancialEntry> committedEntries() {
+        return statusIn(EntryStatus.COMMITTED_STATUSES);
     }
 
     public static Specification<FinancialEntry> needsPayment() {

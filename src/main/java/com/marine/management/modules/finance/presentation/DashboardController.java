@@ -103,7 +103,7 @@ public class DashboardController {
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
     ) {
-        LocalDate start = startDate != null ? startDate : LocalDate.now().minusMonths(1);
+        LocalDate start = startDate != null ? startDate : LocalDate.now().withDayOfYear(1);
         LocalDate end = endDate != null ? endDate : LocalDate.now();
 
         Period period = Period.of(start, end); //  Validation

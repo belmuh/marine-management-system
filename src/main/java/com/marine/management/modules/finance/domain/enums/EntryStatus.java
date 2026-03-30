@@ -1,6 +1,8 @@
 package com.marine.management.modules.finance.domain.enums;
 
+import java.util.Arrays;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Financial entry status with state machine transitions.
@@ -222,6 +224,41 @@ public enum EntryStatus {
             return true;
         }
     };
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // REPORTING CATEGORY MAPPING
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Maps this status to its financial reporting category.
+     *
+     * ACTUAL        → counted in financial totals (approved / paid)
+     * COMMITTED     → shown separately as forecast/pipeline (pending approval)
+     * NON_FINANCIAL → never included in any financial calculation (draft / rejected)
+     */
+    public ReportingCategory getReportingCategory() {
+        return switch (this) {
+            case APPROVED, PARTIALLY_PAID, PAID          -> ReportingCategory.ACTUAL;
+            case PENDING_CAPTAIN, PENDING_MANAGER        -> ReportingCategory.COMMITTED;
+            case DRAFT, REJECTED                         -> ReportingCategory.NON_FINANCIAL;
+        };
+    }
+
+    /**
+     * Statuses that count as financial actuals.
+     * Derived from getReportingCategory() — no need to update this set manually.
+     */
+    public static final Set<EntryStatus> ACTUAL_STATUSES = Arrays.stream(values())
+            .filter(s -> s.getReportingCategory() == ReportingCategory.ACTUAL)
+            .collect(Collectors.toUnmodifiableSet());
+
+    /**
+     * Statuses that represent committed but not yet approved entries (forecast/pipeline).
+     * Derived from getReportingCategory() — no need to update this set manually.
+     */
+    public static final Set<EntryStatus> COMMITTED_STATUSES = Arrays.stream(values())
+            .filter(s -> s.getReportingCategory() == ReportingCategory.COMMITTED)
+            .collect(Collectors.toUnmodifiableSet());
 
     // ═══════════════════════════════════════════════════════════════════════════
     // ABSTRACT METHODS

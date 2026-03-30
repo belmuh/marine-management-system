@@ -3,6 +3,7 @@ package com.marine.management.modules.auth.presentation;
 
 import com.marine.management.modules.auth.application.AuthService;
 import com.marine.management.modules.auth.application.RefreshTokenService;
+import com.marine.management.modules.auth.application.RegistrationService;
 import com.marine.management.modules.auth.domain.commands.AuthResult;
 import com.marine.management.modules.auth.domain.commands.LoginCommand;
 import com.marine.management.modules.auth.infrastructure.JwtUtil;
@@ -10,6 +11,8 @@ import com.marine.management.modules.auth.presentation.dto.AuthResponse;
 import com.marine.management.modules.auth.presentation.dto.LoginRequest;
 import com.marine.management.modules.auth.presentation.dto.RefreshTokenRequest;
 import com.marine.management.modules.auth.presentation.dto.RefreshTokenResponse;
+import com.marine.management.modules.auth.presentation.dto.RegisterRequest;
+import com.marine.management.modules.auth.presentation.dto.RegisterResponse;
 import com.marine.management.modules.users.domain.User;
 import com.marine.management.shared.security.PublicEndpoint;
 import jakarta.servlet.http.HttpServletRequest;
@@ -18,6 +21,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 /**
  * Authentication controller for user login, token refresh, and profile access.
@@ -37,15 +42,18 @@ public class AuthController {
     private final AuthService authService;
     private final RefreshTokenService refreshTokenService;
     private final JwtUtil jwtUtil;
+    private final RegistrationService registrationService;
 
     public AuthController(
             AuthService authService,
             RefreshTokenService refreshTokenService,
-            JwtUtil jwtUtil
+            JwtUtil jwtUtil,
+            RegistrationService registrationService
     ) {
         this.authService = authService;
         this.refreshTokenService = refreshTokenService;
         this.jwtUtil = jwtUtil;
+        this.registrationService = registrationService;
     }
 
     /**
@@ -154,5 +162,70 @@ public class AuthController {
     public ResponseEntity<Void> logout(@RequestBody RefreshTokenRequest request) {
         refreshTokenService.deleteRefreshToken(request.refreshToken());
         return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Register a new user with minimal information.
+     * Creates organization + unverified user, sends verification email.
+     *
+     * PUBLIC: No authentication required.
+     */
+    @PostMapping("/register")
+    @PublicEndpoint(reason = "User registration - creates new account")
+    public ResponseEntity<RegisterResponse> register(
+            @Valid @RequestBody RegisterRequest request
+    ) {
+        String email = registrationService.register(
+                request.yachtName(),
+                request.companyName(),
+                request.firstName(),
+                request.lastName(),
+                request.email(),
+                request.password(),
+                request.phoneNumber()
+        );
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(RegisterResponse.success(email));
+    }
+
+    /**
+     * Verify user's email address using verification token.
+     *
+     * PUBLIC: No authentication required.
+     */
+    @GetMapping("/verify-email")
+    @PublicEndpoint(reason = "Email verification - activates user account")
+    public ResponseEntity<Map<String, Object>> verifyEmail(
+            @RequestParam("token") String token
+    ) {
+        registrationService.verifyEmail(token);
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Email verified successfully. You can now log in.",
+                "verified", true
+        ));
+    }
+
+    /**
+     * Resend email verification link.
+     *
+     * PUBLIC: No authentication required.
+     */
+    @PostMapping("/resend-verification")
+    @PublicEndpoint(reason = "Resend verification email")
+    public ResponseEntity<Map<String, String>> resendVerification(
+            @RequestBody Map<String, String> request
+    ) {
+        String email = request.get("email");
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Email is required"));
+        }
+
+        registrationService.resendVerification(email);
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Verification email sent. Please check your inbox."
+        ));
     }
 }

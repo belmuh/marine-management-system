@@ -3,6 +3,7 @@ package com.marine.management.modules.finance.application.usecase;
 import com.marine.management.modules.finance.application.dto.CumulativeBalanceDTO;
 import com.marine.management.modules.finance.application.mapper.DashboardMapper;
 import com.marine.management.modules.finance.application.mapper.MonthlyBalanceMapper;
+import com.marine.management.modules.finance.domain.enums.EntryStatus;
 import com.marine.management.modules.finance.domain.service.CumulativeBalanceCalculator;
 import com.marine.management.modules.finance.domain.vo.CumulativeBalance;
 import com.marine.management.modules.finance.domain.vo.MonthlyBalance;
@@ -69,7 +70,7 @@ public class GetCumulativeBalanceUseCase {
 
         // Query monthly totals
         List<MonthlyTotalProjection> projections =
-                reportRepository.findMonthlyTotals(period.startDate(), period.endDate());
+                reportRepository.findMonthlyTotals(period.startDate(), period.endDate(), EntryStatus.ACTUAL_STATUSES);
 
         if (projections.isEmpty()) {
             log.warn("No data found for period: {}", period.format());
@@ -113,7 +114,7 @@ public class GetCumulativeBalanceUseCase {
 
         // Query monthly totals
         List<MonthlyTotalProjection> projections =
-                reportRepository.findMonthlyTotals(period.startDate(), period.endDate());
+                reportRepository.findMonthlyTotals(period.startDate(), period.endDate(), EntryStatus.ACTUAL_STATUSES);
 
         // Map to domain objects
         List<MonthlyBalance> monthlyBalances =

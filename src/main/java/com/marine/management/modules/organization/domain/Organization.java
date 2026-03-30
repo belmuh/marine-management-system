@@ -11,8 +11,9 @@ import java.util.Objects;
  * Organization entity - tenant root.
  *
  * DESIGN DECISIONS:
- * - Unique yacht_name: Assumes global namespace (one yacht name across all orgs)
- * - Immutable critical fields: yachtName, flagCountry, baseCurrency (use rename/change methods)
+ * - Unique yacht_name: global namespace (one yacht name across all orgs)
+ * - Immutable critical fields set during onboarding: flagCountry, baseCurrency, timezone, financialYearStartMonth
+ *   (changing these = new tenant, because financial history depends on them)
  * - Subscription guard: isActive() checks expiration
  */
 @Entity
@@ -43,8 +44,9 @@ public class Organization extends BaseAuditedEntity {
     @Column(name = "base_currency", nullable = false, length = 3)
     private String baseCurrency;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "yacht_type", length = 50)
-    private String yachtType;
+    private YachtType yachtType;
 
     @Column(name = "yacht_length")
     private Integer yachtLength;
@@ -54,6 +56,20 @@ public class Organization extends BaseAuditedEntity {
 
     @Column(name = "current_location", length = 200)
     private String currentLocation;
+
+    /**
+     * Timezone for this tenant. Set during onboarding, immutable after creation.
+     * All date/time operations for this tenant use this timezone.
+     */
+    @Column(name = "timezone", nullable = false, length = 50)
+    private String timezone = "Europe/Istanbul";
+
+    /**
+     * Month when the financial year starts (1-12). Set during onboarding, immutable after creation.
+     * Used for annual budget calculations and carry-over balance.
+     */
+    @Column(name = "financial_year_start_month", nullable = false)
+    private Integer financialYearStartMonth = 1;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "subscription_status", nullable = false, length = 30)
@@ -80,18 +96,25 @@ public class Organization extends BaseAuditedEntity {
     @Column(name = "approval_limit", precision = 15, scale = 2)
     private BigDecimal approvalLimit;
 
+    @Column(name = "onboarding_completed", nullable = false)
+    private boolean onboardingCompleted = false;
+
     protected Organization() {}
 
     private Organization(
             String yachtName,
             String companyName,
             String flagCountry,
-            String baseCurrency
+            String baseCurrency,
+            String timezone,
+            Integer financialYearStartMonth
     ) {
         this.yachtName = validateYachtName(yachtName);
         this.companyName = companyName;
         this.flagCountry = validateCountryCode(flagCountry);
         this.baseCurrency = validateCurrencyCode(baseCurrency);
+        this.timezone = validateTimezone(timezone);
+        this.financialYearStartMonth = validateFinancialYearStartMonth(financialYearStartMonth);
         this.subscriptionStatus = SubscriptionStatus.TRIAL;
         this.subscriptionExpiresAt = LocalDate.now().plusDays(30);
         this.active = true;
@@ -106,17 +129,42 @@ public class Organization extends BaseAuditedEntity {
         return id;
     }
 
+    /**
+     * Full factory method for wizard-based registration.
+     */
+    public static Organization create(
+            String yachtName,
+            String companyName,
+            String flagCountry,
+            String baseCurrency,
+            String timezone,
+            Integer financialYearStartMonth
+    ) {
+        return new Organization(yachtName, companyName, flagCountry, baseCurrency, timezone, financialYearStartMonth);
+    }
+
+    /**
+     * Simplified factory method (uses defaults for timezone/financialYear).
+     */
     public static Organization create(
             String yachtName,
             String companyName,
             String flagCountry,
             String baseCurrency
     ) {
-        return new Organization(yachtName, companyName, flagCountry, baseCurrency);
+        return new Organization(yachtName, companyName, flagCountry, baseCurrency, "Europe/Istanbul", 1);
     }
 
     public static Organization create(String yachtName, String flagCountry, String baseCurrency) {
-        return new Organization(yachtName, null, flagCountry, baseCurrency);
+        return new Organization(yachtName, null, flagCountry, baseCurrency, "Europe/Istanbul", 1);
+    }
+
+    /**
+     * Minimal factory for registration - only yacht name required.
+     * Onboarding will be completed later with all setup details.
+     */
+    public static Organization createMinimal(String yachtName) {
+        return new Organization(yachtName, null, "TR", "EUR", "Europe/Istanbul", 1);
     }
 
     private String validateYachtName(String name) {
@@ -143,9 +191,29 @@ public class Organization extends BaseAuditedEntity {
         return code.toUpperCase();
     }
 
+    private String validateTimezone(String tz) {
+        if (tz == null || tz.trim().isEmpty()) {
+            return "Europe/Istanbul";
+        }
+        if (!java.time.ZoneId.getAvailableZoneIds().contains(tz)) {
+            throw new IllegalArgumentException("Invalid timezone: " + tz);
+        }
+        return tz;
+    }
+
+    private Integer validateFinancialYearStartMonth(Integer month) {
+        if (month == null) {
+            return 1;
+        }
+        if (month < 1 || month > 12) {
+            throw new IllegalArgumentException("Financial year start month must be between 1 and 12");
+        }
+        return month;
+    }
+
     public void updateDetails(
             String companyName,
-            String yachtType,
+            YachtType yachtType,
             Integer yachtLength,
             String homeMarina,
             String currentLocation
@@ -202,14 +270,46 @@ public class Organization extends BaseAuditedEntity {
         this.approvalLimit = null;
     }
 
+    public void completeOnboarding() {
+        this.onboardingCompleted = true;
+    }
+
+    public void completeSetup(
+            String companyName,
+            String flagCountry,
+            String baseCurrency,
+            YachtType yachtType,
+            Integer yachtLength,
+            String homeMarina,
+            String timezone,
+            Integer financialYearStartMonth,
+            boolean managerApprovalEnabled,
+            BigDecimal approvalLimit
+    ) {
+        this.companyName = companyName;
+        this.flagCountry = validateCountryCode(flagCountry);
+        this.baseCurrency = validateCurrencyCode(baseCurrency);
+        this.yachtType = yachtType;
+        this.yachtLength = yachtLength;
+        this.homeMarina = homeMarina;
+        this.timezone = validateTimezone(timezone);
+        this.financialYearStartMonth = validateFinancialYearStartMonth(financialYearStartMonth);
+        if (managerApprovalEnabled) {
+            enableManagerApproval(approvalLimit);
+        }
+        this.onboardingCompleted = true;
+    }
+
     public String getYachtName() { return yachtName; }
     public String getCompanyName() { return companyName; }
     public String getFlagCountry() { return flagCountry; }
     public String getBaseCurrency() { return baseCurrency; }
-    public String getYachtType() { return yachtType; }
+    public YachtType getYachtType() { return yachtType; }
     public Integer getYachtLength() { return yachtLength; }
     public String getHomeMarina() { return homeMarina; }
     public String getCurrentLocation() { return currentLocation; }
+    public String getTimezone() { return timezone; }
+    public Integer getFinancialYearStartMonth() { return financialYearStartMonth; }
     public SubscriptionStatus getSubscriptionStatus() { return subscriptionStatus; }
     public LocalDate getSubscriptionExpiresAt() { return subscriptionExpiresAt; }
     public boolean isManagerApprovalEnabled() { return managerApprovalEnabled; }
@@ -218,6 +318,7 @@ public class Organization extends BaseAuditedEntity {
     }
     public BigDecimal getApprovalLimit() { return approvalLimit;}
     public void setApprovalLimit(BigDecimal approvalLimit) { this.approvalLimit = approvalLimit; }
+    public boolean isOnboardingCompleted() { return onboardingCompleted; }
 
     @Override
     public boolean equals(Object o) {

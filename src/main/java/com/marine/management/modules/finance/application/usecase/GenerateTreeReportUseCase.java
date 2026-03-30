@@ -2,6 +2,7 @@ package com.marine.management.modules.finance.application.usecase;
 
 import com.marine.management.modules.finance.application.dto.TreeReportResponse;
 import com.marine.management.modules.finance.application.mapper.TreeReportMapper;
+import com.marine.management.modules.finance.domain.enums.EntryStatus;
 import com.marine.management.modules.finance.domain.enums.RecordType;
 import com.marine.management.modules.finance.domain.model.TreeReportProjection;
 import com.marine.management.modules.finance.domain.vo.Period;
@@ -63,7 +64,8 @@ public class GenerateTreeReportUseCase {
         List<TreeReportProjection> projections = reportRepository.findTreeProjections(
                 recordType,
                 period.startDate(),
-                period.endDate()
+                period.endDate(),
+                EntryStatus.ACTUAL_STATUSES
         );
 
         // Build tree and wrap in response (delegation to mapper)

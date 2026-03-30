@@ -1,16 +1,12 @@
-// modules/auth/application/RegistrationService.java
 package com.marine.management.modules.auth.application;
 
-import com.marine.management.modules.auth.presentation.dto.RegisterOrganizationRequest;
-import com.marine.management.modules.auth.presentation.dto.RegisterOrganizationResponse;
-import com.marine.management.modules.finance.application.TenantReferenceDataInitializer;
+import com.marine.management.modules.auth.application.EmailService;
 import com.marine.management.modules.organization.domain.Organization;
 import com.marine.management.modules.organization.infrastructure.OrganizationRepository;
 import com.marine.management.modules.users.domain.User;
-import com.marine.management.shared.multitenant.TenantContext;
-import com.marine.management.shared.security.Role;
-import com.marine.management.shared.exceptions.UserRegistrationException;
 import com.marine.management.modules.users.infrastructure.UserRepository;
+import com.marine.management.shared.exceptions.UserRegistrationException;
+import com.marine.management.shared.security.Role;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -19,132 +15,129 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Objects;
 
+/**
+ * Handles user registration with email verification.
+ *
+ * New flow:
+ * 1. Register: Creates minimal org + unverified user, sends verification email
+ * 2. Verify: Activates user's email via token
+ * 3. Resend: Generates new token and resends verification email
+ */
 @Service
 public class RegistrationService {
 
     private static final Logger logger = LoggerFactory.getLogger(RegistrationService.class);
 
-    private final OrganizationRepository organizationRepository;
     private final UserRepository userRepository;
+    private final OrganizationRepository organizationRepository;
     private final PasswordEncoder passwordEncoder;
-    private final TenantReferenceDataInitializer tenantReferenceDataInitializer;
+    private final EmailService emailService;
 
     public RegistrationService(
-            OrganizationRepository organizationRepository,
             UserRepository userRepository,
+            OrganizationRepository organizationRepository,
             PasswordEncoder passwordEncoder,
-            TenantReferenceDataInitializer tenantReferenceDataInitializer
+            EmailService emailService
     ) {
-        this.organizationRepository = organizationRepository;
         this.userRepository = userRepository;
+        this.organizationRepository = organizationRepository;
         this.passwordEncoder = passwordEncoder;
-        this.tenantReferenceDataInitializer = tenantReferenceDataInitializer;
+        this.emailService = emailService;
     }
 
     /**
-     * Register new organization with admin user.
-     *
-     * CRITICAL FLOW:
-     * 1. Create Organization (tenant)
-     * 2. Create Admin User
-     * 3. Set TenantContext for reference data initialization
-     * 4. Initialize tenant-specific reference data (categories, WHO data)
-     * 5. Clear TenantContext
-     *
-     * @param request Registration request with organization and admin details
-     * @return Registration response with organization and user IDs
-     * @throws UserRegistrationException if email or organization name already exists
+     * Register a new user with minimal information.
+     * Creates organization with defaults, creates unverified user, sends verification email.
      */
     @Transactional
-    public RegisterOrganizationResponse registerNewOrganization(RegisterOrganizationRequest request) {
-        Objects.requireNonNull(request, "Registration request cannot be null");
+    public String register(String yachtName, String companyName, String firstName, String lastName,
+                           String email, String password, String phoneNumber) {
+        Objects.requireNonNull(email, "Email cannot be null");
+        Objects.requireNonNull(password, "Password cannot be null");
+        Objects.requireNonNull(yachtName, "Yacht name cannot be null");
 
-        logger.info("Starting registration for organization: {}", request.organizationName());
+        logger.info("Starting registration for email: {}", email);
 
-        // ============================================
-        // VALIDATIONS
-        // ============================================
-
-        //  Check email uniqueness (global)
-        if (userRepository.existsByEmail(request.adminEmail())) {
-            throw UserRegistrationException.emailAlreadyExists(request.adminEmail());
+        // Validate uniqueness
+        if (userRepository.existsByEmail(email.trim().toLowerCase())) {
+            throw UserRegistrationException.emailAlreadyExists(email);
         }
 
-        // Check organization name uniqueness
-        if (organizationRepository.existsByYachtName(request.organizationName())) {
-            throw UserRegistrationException.organizationNameAlreadyExists(request.organizationName());
+        if (organizationRepository.existsByYachtName(yachtName.trim())) {
+            throw new IllegalArgumentException("Yacht name '" + yachtName + "' is already registered");
         }
 
-        // ============================================
-        // CREATE ORGANIZATION
-        // ============================================
-
-        String flagCountry = request.country() != null && request.country().length() == 2
-                ? request.country() : "TR";
-        String baseCurrency = "EUR";
-
-        Organization organization = Organization.create(
-                request.organizationName(),
-                request.organizationName(),  // yachtName = organizationName
-                flagCountry,
-                baseCurrency
-        );
+        // Create minimal organization (defaults: TR, EUR, Europe/Istanbul)
+        Organization organization = Organization.createMinimal(yachtName.trim());
+        if (companyName != null && !companyName.isBlank()) {
+            // Update company name via existing method
+            organization.updateDetails(companyName, null, null, null, null);
+        }
         organization = organizationRepository.save(organization);
 
-        //  Set tenant context for reference data initialization
-        Long tenantId = organization.getOrganizationId();
-        TenantContext.setCurrentTenantId(tenantId);
+        logger.info("Created organization: {} (id: {})", organization.getYachtName(), organization.getOrganizationId());
 
-        logger.info(" Created organization with ID: {}", organization.getOrganizationId());
-
-        // ============================================
-        // CREATE ADMIN USER
-        // ============================================
-
-        //  Create user with email (no username field)
-        User adminUser = User.createWithHashedPassword(
-                request.adminEmail(),
-                request.adminFirstName(),
-                request.adminLastName(),// email
-                passwordEncoder.encode(request.password()), // hashedPassword
-                Role.ADMIN,                                // role
-                organization                               // organization
+        // Create unverified admin user
+        String hashedPassword = passwordEncoder.encode(password);
+        User user = User.createUnverified(
+                email.trim().toLowerCase(),
+                firstName,
+                lastName,
+                hashedPassword,
+                Role.ADMIN,
+                organization
         );
 
-        adminUser = userRepository.save(adminUser);
+        user = userRepository.save(user);
 
-        logger.info(" Created admin user with ID: {} (email: {}) for organization: {}",
-                adminUser.getUserId(),
-                adminUser.getEmail(),
-                organization.getOrganizationId());
+        logger.info("Created unverified user: {} (id: {}) for org: {}",
+                user.getEmail(), user.getUserId(), organization.getOrganizationId());
 
-        // ============================================
-        // INITIALIZE TENANT REFERENCE DATA
-        // ============================================
-        logger.info(" TEST TEST TEST Initialized reference data for tenant: {}", organization.getOrganizationId());
+        // Send verification email (async, won't block)
+        emailService.sendVerificationEmail(user.getEmail(), firstName, user.getVerificationToken());
 
-        try {
+        return user.getEmail();
+    }
 
-            // Initialize tenant-specific reference data (MainCategory, WHO data, etc.)
-            tenantReferenceDataInitializer.initializeTenantReferenceData();
+    /**
+     * Verify user's email using the verification token.
+     */
+    @Transactional
+    public void verifyEmail(String token) {
+        Objects.requireNonNull(token, "Verification token cannot be null");
 
-            logger.info(" Initialized reference data for tenant: {}", organization.getOrganizationId());
+        User user = userRepository.findByVerificationToken(token)
+                .orElseThrow(() -> new IllegalArgumentException("Invalid verification token"));
 
-        } finally {
-            //  CRITICAL: Always clear tenant context
-            TenantContext.clear();
+        if (!user.isVerificationTokenValid()) {
+            throw new IllegalArgumentException("Verification token has expired. Please request a new one.");
         }
 
-        // ============================================
-        // RETURN RESPONSE
-        // ============================================
+        user.verifyEmail();
+        userRepository.save(user);
 
-        return new RegisterOrganizationResponse(
-                organization.getOrganizationId(),
-                organization.getYachtName(),
-                adminUser.getUserId(),
-                adminUser.getEmail(),
-                "Organization registered successfully. Please complete the onboarding setup."
-        );
+        logger.info("Email verified for user: {}", user.getEmail());
+    }
+
+    /**
+     * Resend verification email with a new token.
+     */
+    @Transactional
+    public void resendVerification(String email) {
+        Objects.requireNonNull(email, "Email cannot be null");
+
+        User user = userRepository.findByEmail(email.trim().toLowerCase())
+                .orElseThrow(() -> new IllegalArgumentException("No account found with this email"));
+
+        if (user.isEmailVerified()) {
+            throw new IllegalArgumentException("Email is already verified");
+        }
+
+        String newToken = user.generateVerificationToken();
+        userRepository.save(user);
+
+        emailService.sendVerificationEmail(user.getEmail(), user.getFirstName(), newToken);
+
+        logger.info("Resent verification email to: {}", email);
     }
 }

@@ -35,6 +35,11 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("SELECT u FROM User u JOIN FETCH u.organization WHERE u.email = :email")
     Optional<User> findByEmailWithOrganization(@Param("email") String email);
 
+    /**
+     * Find user by verification token (used for email verification).
+     */
+    Optional<User> findByVerificationToken(String verificationToken);
+
     // ============================================
     // TENANT-SCOPED QUERIES
     // ============================================

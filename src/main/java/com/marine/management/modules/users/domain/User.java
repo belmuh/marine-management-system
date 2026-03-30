@@ -60,6 +60,15 @@ public class User extends BaseAuditedEntity implements UserDetails, TenantAwareU
     @Column(name = "last_login_at")
     private LocalDateTime lastLoginAt;
 
+    @Column(name = "email_verified", nullable = false)
+    private boolean emailVerified = false;
+
+    @Column(name = "verification_token", length = 100)
+    private String verificationToken;
+
+    @Column(name = "verification_token_expires_at")
+    private LocalDateTime verificationTokenExpiresAt;
+
     protected User() {}
 
     private User(String email, String password, Role role, Organization organization) {
@@ -89,6 +98,20 @@ public class User extends BaseAuditedEntity implements UserDetails, TenantAwareU
         User user = new User(email, hashedPassword, role, organization);
         user.firstName = firstName;
         user.lastName = lastName;
+        user.emailVerified = true; // Admin/system tarafından oluşturulan kullanıcılar doğrulanmış sayılır
+        return user;
+    }
+
+    public static User createUnverified(
+            String email,
+            String firstName,
+            String lastName,
+            String hashedPassword,
+            Role role,
+            Organization organization
+    ) {
+        User user = createWithHashedPassword(email, firstName, lastName, hashedPassword, role, organization);
+        user.generateVerificationToken();
         return user;
     }
 
@@ -236,6 +259,28 @@ public class User extends BaseAuditedEntity implements UserDetails, TenantAwareU
         this.role = Objects.requireNonNull(newRole, "Role cannot be null");
     }
 
+    public String generateVerificationToken() {
+        this.verificationToken = UUID.randomUUID().toString();
+        this.verificationTokenExpiresAt = LocalDateTime.now().plusHours(24);
+        return this.verificationToken;
+    }
+
+    public void verifyEmail() {
+        this.emailVerified = true;
+        this.verificationToken = null;
+        this.verificationTokenExpiresAt = null;
+    }
+
+    public boolean isVerificationTokenValid() {
+        if (verificationToken == null) {
+            return false;
+        }
+        if (verificationTokenExpiresAt == null) {
+            return false;
+        }
+        return verificationTokenExpiresAt.isAfter(LocalDateTime.now());
+    }
+
     private String validateEmail(String email) {
         if (email == null || email.trim().isEmpty()) {
             throw new IllegalArgumentException("Email cannot be null or empty");
@@ -275,6 +320,18 @@ public class User extends BaseAuditedEntity implements UserDetails, TenantAwareU
 
     public LocalDateTime getLastLoginAt() {
         return lastLoginAt;
+    }
+
+    public boolean isEmailVerified() {
+        return emailVerified;
+    }
+
+    public String getVerificationToken() {
+        return verificationToken;
+    }
+
+    public LocalDateTime getVerificationTokenExpiresAt() {
+        return verificationTokenExpiresAt;
     }
 
     public void setFirstName(String firstName) {

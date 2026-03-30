@@ -7,7 +7,12 @@ public record DashboardSummary(
         BigDecimal totalExpense,
         BigDecimal balance,
         long incomeCount,
-        long expenseCount
+        long expenseCount,
+        // Status-based counts
+        long paidCount,
+        long approvedCount,
+        long draftCount,
+        long pendingCount
 ) {
     public boolean isProfit() {
         return balance.compareTo(BigDecimal.ZERO) > 0;

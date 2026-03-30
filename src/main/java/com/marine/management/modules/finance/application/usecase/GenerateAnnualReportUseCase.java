@@ -10,6 +10,8 @@ import com.marine.management.modules.finance.presentation.dto.reports.AnnualBrea
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.marine.management.modules.finance.domain.enums.EntryStatus;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.HashMap;
@@ -61,13 +63,13 @@ public class GenerateAnnualReportUseCase {
         LocalDate periodStart = LocalDate.of(year, 1, 1);
 
         // Fetch data from database
-        BigDecimal carryOver = reportRepository.findCarryOverBalance(periodStart);
+        BigDecimal carryOver = reportRepository.findCarryOverBalance(periodStart, EntryStatus.ACTUAL_STATUSES);
 
         List<FinancialEntryReportRepository.CategoryMonthBreakdownProjection> categoryBreakdowns =
-                reportRepository.findCategoryMonthBreakdown(RecordType.EXPENSE, year);
+                reportRepository.findCategoryMonthBreakdown(RecordType.EXPENSE, year, EntryStatus.ACTUAL_STATUSES);
 
         List<FinancialEntryReportRepository.MonthlyIncomeExpenseProjection> monthlyTotals =
-                reportRepository.findMonthlyIncomeExpense(year);
+                reportRepository.findMonthlyIncomeExpense(year, EntryStatus.ACTUAL_STATUSES);
 
         // Build domain model
         AnnualReport report = buildAnnualReport(year, categoryBreakdowns, monthlyTotals, carryOver);

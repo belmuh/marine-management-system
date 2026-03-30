@@ -90,6 +90,7 @@ public class DemoDataInitializer implements CommandLineRunner {
                     "TR",
                     "EUR"
             );
+            organization.completeOnboarding(); // Demo org için onboarding tamamlandı sayılır
             organization = organizationRepository.save(organization);
             Long tenantId = organization.getOrganizationId();
 

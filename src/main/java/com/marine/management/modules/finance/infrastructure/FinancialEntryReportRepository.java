@@ -1,5 +1,6 @@
 package com.marine.management.modules.finance.infrastructure;
 
+import com.marine.management.modules.finance.domain.enums.EntryStatus;
 import com.marine.management.modules.finance.domain.enums.RecordType;
 import com.marine.management.modules.finance.domain.entities.FinancialEntry;
 import com.marine.management.modules.finance.domain.model.PivotReportProjection;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Repository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Repository
@@ -22,15 +24,17 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
     // ============================================
 
     @Query("""
-        SELECT e.entryType as entryType, 
-               SUM(e.baseAmount.amount) as total 
-        FROM FinancialEntry e 
-        WHERE e.entryDate BETWEEN :start AND :end 
+        SELECT e.entryType as entryType,
+               SUM(e.baseAmount.amount) as total
+        FROM FinancialEntry e
+        WHERE e.entryDate BETWEEN :start AND :end
+        AND e.status IN :statuses
         GROUP BY e.entryType
     """)
     List<PeriodTotalProjection> findPeriodTotals(
             @Param("start") LocalDate start,
-            @Param("end") LocalDate end
+            @Param("end") LocalDate end,
+            @Param("statuses") Set<EntryStatus> statuses
     );
 
     // ============================================
@@ -42,27 +46,29 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
                c.code as categoryCode,
                c.name as categoryName,
                c.technical as technical,
-               SUM(e.baseAmount.amount) as total, 
-               COUNT(e.id) as entryCount 
-        FROM FinancialEntry e 
+               SUM(e.baseAmount.amount) as total,
+               COUNT(e.id) as entryCount
+        FROM FinancialEntry e
         JOIN e.category c
-        WHERE e.entryType = :entryType 
-        AND e.entryDate BETWEEN :start AND :end 
+        WHERE e.entryType = :entryType
+        AND e.entryDate BETWEEN :start AND :end
+        AND e.status IN :statuses
         GROUP BY c.id, c.code, c.name, c.technical
         ORDER BY SUM(e.baseAmount.amount) DESC
     """)
     List<CategoryTotalProjection> findCategoryTotals(
             @Param("entryType") RecordType entryType,
             @Param("start") LocalDate start,
-            @Param("end") LocalDate end
+            @Param("end") LocalDate end,
+            @Param("statuses") Set<EntryStatus> statuses
     );
 
-    default List<CategoryTotalProjection> findExpenseTotals(LocalDate start, LocalDate end) {
-        return findCategoryTotals(RecordType.EXPENSE, start, end);
+    default List<CategoryTotalProjection> findExpenseTotals(LocalDate start, LocalDate end, Set<EntryStatus> statuses) {
+        return findCategoryTotals(RecordType.EXPENSE, start, end, statuses);
     }
 
-    default List<CategoryTotalProjection> findIncomeTotals(LocalDate start, LocalDate end) {
-        return findCategoryTotals(RecordType.INCOME, start, end);
+    default List<CategoryTotalProjection> findIncomeTotals(LocalDate start, LocalDate end, Set<EntryStatus> statuses) {
+        return findCategoryTotals(RecordType.INCOME, start, end, statuses);
     }
 
     // ============================================
@@ -75,20 +81,22 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
                w.nameTr as whoNameTr,
                w.nameEn as whoNameEn,
                w.technical as technical,
-               SUM(e.baseAmount.amount) as total, 
-               COUNT(e.id) as entryCount 
-        FROM FinancialEntry e 
+               SUM(e.baseAmount.amount) as total,
+               COUNT(e.id) as entryCount
+        FROM FinancialEntry e
         JOIN e.tenantWho tw
         JOIN tw.who w
-        WHERE e.entryType = :entryType 
-        AND e.entryDate BETWEEN :start AND :end 
+        WHERE e.entryType = :entryType
+        AND e.entryDate BETWEEN :start AND :end
+        AND e.status IN :statuses
         GROUP BY w.id, w.code, w.nameTr, w.nameEn, w.technical
         ORDER BY SUM(e.baseAmount.amount) DESC
     """)
     List<WhoTotalProjection> findWhoTotals(
             @Param("entryType") RecordType entryType,
             @Param("start") LocalDate start,
-            @Param("end") LocalDate end
+            @Param("end") LocalDate end,
+            @Param("statuses") Set<EntryStatus> statuses
     );
 
     // ============================================
@@ -101,20 +109,22 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
                mc.nameTr as mainCategoryNameTr,
                mc.nameEn as mainCategoryNameEn,
                mc.technical as technical,
-               SUM(e.baseAmount.amount) as total, 
-               COUNT(e.id) as entryCount 
-        FROM FinancialEntry e 
+               SUM(e.baseAmount.amount) as total,
+               COUNT(e.id) as entryCount
+        FROM FinancialEntry e
         JOIN e.tenantMainCategory tmc
         JOIN tmc.mainCategory mc
-        WHERE e.entryType = :entryType 
-        AND e.entryDate BETWEEN :start AND :end 
+        WHERE e.entryType = :entryType
+        AND e.entryDate BETWEEN :start AND :end
+        AND e.status IN :statuses
         GROUP BY mc.id, mc.code, mc.nameTr, mc.nameEn, mc.technical
         ORDER BY SUM(e.baseAmount.amount) DESC
     """)
     List<MainCategoryTotalProjection> findMainCategoryTotals(
             @Param("entryType") RecordType entryType,
             @Param("start") LocalDate start,
-            @Param("end") LocalDate end
+            @Param("end") LocalDate end,
+            @Param("statuses") Set<EntryStatus> statuses
     );
 
     // ============================================
@@ -147,6 +157,7 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
         LEFT JOIN tw.who w
         WHERE e.entryType = :entryType
         AND e.entryDate BETWEEN :startDate AND :endDate
+        AND e.status IN :statuses
         GROUP BY mc.id, mc.code, mc.nameTr, mc.nameEn, mc.technical,
                  c.id, c.code, c.name, c.technical,
                  w.id, w.code, w.nameTr, w.nameEn, w.technical
@@ -155,7 +166,8 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
     List<TreeReportProjection> findTreeProjections(
             @Param("entryType") RecordType entryType,
             @Param("startDate") LocalDate startDate,
-            @Param("endDate") LocalDate endDate
+            @Param("endDate") LocalDate endDate,
+            @Param("statuses") Set<EntryStatus> statuses
     );
 
     // ============================================
@@ -189,6 +201,7 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
         LEFT JOIN tw.who w
         WHERE e.entryType = :entryType
         AND EXTRACT(YEAR FROM e.entryDate) = :year
+        AND e.status IN :statuses
         GROUP BY mc.id, mc.code, mc.nameTr, mc.nameEn, mc.technical,
                  c.id, c.code, c.name, c.technical,
                  w.id, w.code, w.nameTr, w.nameEn, w.technical,
@@ -197,7 +210,8 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
     """)
     List<PivotReportProjection> findPivotProjections(
             @Param("entryType") RecordType entryType,
-            @Param("year") int year
+            @Param("year") int year,
+            @Param("statuses") Set<EntryStatus> statuses
     );
 
     // ============================================
@@ -205,21 +219,23 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
     // ============================================
 
     @Query("""
-        SELECT EXTRACT(YEAR FROM e.entryDate) as year, 
-               EXTRACT(MONTH FROM e.entryDate) as month, 
-               e.entryType as entryType, 
-               SUM(e.baseAmount.amount) as total, 
-               COUNT(e.id) as entryCount 
-        FROM FinancialEntry e 
-        WHERE e.entryDate BETWEEN :start AND :end 
-        GROUP BY EXTRACT(YEAR FROM e.entryDate), 
-                 EXTRACT(MONTH FROM e.entryDate), 
-                 e.entryType 
+        SELECT EXTRACT(YEAR FROM e.entryDate) as year,
+               EXTRACT(MONTH FROM e.entryDate) as month,
+               e.entryType as entryType,
+               SUM(e.baseAmount.amount) as total,
+               COUNT(e.id) as entryCount
+        FROM FinancialEntry e
+        WHERE e.entryDate BETWEEN :start AND :end
+        AND e.status IN :statuses
+        GROUP BY EXTRACT(YEAR FROM e.entryDate),
+                 EXTRACT(MONTH FROM e.entryDate),
+                 e.entryType
         ORDER BY year, month
     """)
     List<MonthlyTotalProjection> findMonthlyTotals(
             @Param("start") LocalDate start,
-            @Param("end") LocalDate end
+            @Param("end") LocalDate end,
+            @Param("statuses") Set<EntryStatus> statuses
     );
 
     @Query("""
@@ -231,12 +247,14 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
         JOIN e.category c
         WHERE e.entryType = :entryType
         AND EXTRACT(YEAR FROM e.entryDate) = :year
+        AND e.status IN :statuses
         GROUP BY c.id, c.name, EXTRACT(MONTH FROM e.entryDate)
         ORDER BY c.name, month
     """)
     List<CategoryMonthBreakdownProjection> findCategoryMonthBreakdown(
             @Param("entryType") RecordType entryType,
-            @Param("year") int year
+            @Param("year") int year,
+            @Param("statuses") Set<EntryStatus> statuses
     );
 
     @Query("""
@@ -248,44 +266,50 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
         JOIN e.category c
         WHERE e.entryType = :entryType
         AND e.entryDate BETWEEN :start AND :end
+        AND e.status IN :statuses
         GROUP BY c.id, c.name, EXTRACT(MONTH FROM e.entryDate)
         ORDER BY c.name, month
     """)
     List<CategoryMonthBreakdownProjection> findCategoryMonthBreakdownByPeriod(
             @Param("entryType") RecordType entryType,
             @Param("start") LocalDate start,
-            @Param("end") LocalDate end
+            @Param("end") LocalDate end,
+            @Param("statuses") Set<EntryStatus> statuses
     );
 
     @Query("""
-        SELECT EXTRACT(MONTH FROM e.entryDate) as month, 
-               e.entryType as entryType, 
-               SUM(e.baseAmount.amount) as total 
-        FROM FinancialEntry e 
-        WHERE EXTRACT(YEAR FROM e.entryDate) = :year 
-        GROUP BY EXTRACT(MONTH FROM e.entryDate), e.entryType 
+        SELECT EXTRACT(MONTH FROM e.entryDate) as month,
+               e.entryType as entryType,
+               SUM(e.baseAmount.amount) as total
+        FROM FinancialEntry e
+        WHERE EXTRACT(YEAR FROM e.entryDate) = :year
+        AND e.status IN :statuses
+        GROUP BY EXTRACT(MONTH FROM e.entryDate), e.entryType
         ORDER BY month
     """)
     List<MonthlyIncomeExpenseProjection> findMonthlyIncomeExpense(
-            @Param("year") int year
+            @Param("year") int year,
+            @Param("statuses") Set<EntryStatus> statuses
     );
 
     @Query("""
         SELECT mc.id as mainCategoryId,
-               EXTRACT(MONTH FROM e.entryDate) as month, 
-               SUM(e.baseAmount.amount) as total, 
-               COUNT(e.id) as entryCount 
-        FROM FinancialEntry e 
+               EXTRACT(MONTH FROM e.entryDate) as month,
+               SUM(e.baseAmount.amount) as total,
+               COUNT(e.id) as entryCount
+        FROM FinancialEntry e
         JOIN e.tenantMainCategory tmc
         JOIN tmc.mainCategory mc
-        WHERE e.entryType = :entryType 
-        AND EXTRACT(YEAR FROM e.entryDate) = :year 
-        GROUP BY mc.id, EXTRACT(MONTH FROM e.entryDate) 
+        WHERE e.entryType = :entryType
+        AND EXTRACT(YEAR FROM e.entryDate) = :year
+        AND e.status IN :statuses
+        GROUP BY mc.id, EXTRACT(MONTH FROM e.entryDate)
         ORDER BY mc.id, month
     """)
     List<MainCategoryMonthBreakdownProjection> findMainCategoryMonthBreakdown(
             @Param("entryType") RecordType entryType,
-            @Param("year") int year
+            @Param("year") int year,
+            @Param("statuses") Set<EntryStatus> statuses
     );
 
     // ============================================
@@ -303,31 +327,25 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
         ), 0)
         FROM FinancialEntry e
         WHERE e.entryDate < :before
-       /* AND e.status IN ('APPROVED', 'PAID', 'PARTIALLY_PAID')*/
+        AND e.status IN :statuses
     """)
-    BigDecimal findCarryOverBalance(@Param("before") LocalDate before);
+    BigDecimal findCarryOverBalance(
+            @Param("before") LocalDate before,
+            @Param("statuses") Set<EntryStatus> statuses
+    );
 
     @Query("""
         SELECT COALESCE(SUM(e.baseAmount.amount), 0)
         FROM FinancialEntry e
         WHERE e.entryType = :entryType
         AND e.entryDate BETWEEN :start AND :end
+        AND e.status IN :statuses
     """)
     BigDecimal sumByEntryTypeAndDateRange(
             @Param("entryType") RecordType entryType,
             @Param("start") LocalDate start,
-            @Param("end") LocalDate end
-    );
-
-    @Query("""
-        SELECT COUNT(e) FROM FinancialEntry e 
-        WHERE e.tenantWho IS NOT NULL 
-        AND e.tenantMainCategory IS NOT NULL 
-        AND e.entryDate BETWEEN :start AND :end
-    """)
-    long countDetailedEntries(
-            @Param("start") LocalDate start,
-            @Param("end") LocalDate end
+            @Param("end") LocalDate end,
+            @Param("statuses") Set<EntryStatus> statuses
     );
 
     // ============================================

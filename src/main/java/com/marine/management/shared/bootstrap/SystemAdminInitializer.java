@@ -1,8 +1,9 @@
 package com.marine.management.shared.bootstrap;
 
-import com.marine.management.modules.auth.application.RegistrationService;
-import com.marine.management.modules.auth.presentation.dto.RegisterOrganizationRequest;
-import com.marine.management.modules.auth.presentation.dto.RegisterOrganizationResponse;
+import com.marine.management.modules.organization.application.OrganizationOnboardingService;
+import com.marine.management.modules.organization.application.commands.OnboardingResult;
+import com.marine.management.modules.organization.application.commands.RegisterYachtCommand;
+import com.marine.management.modules.organization.domain.YachtType;
 import com.marine.management.modules.organization.infrastructure.OrganizationRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,9 +18,6 @@ import org.springframework.core.annotation.Order;
 public class SystemAdminInitializer {
 
     private static final Logger log = LoggerFactory.getLogger(SystemAdminInitializer.class);
-
-    @Value("${system.admin.username}")
-    private String adminUsername;
 
     @Value("${system.admin.email}")
     private String adminEmail;
@@ -39,38 +37,46 @@ public class SystemAdminInitializer {
     @Bean
     public CommandLineRunner initializeSystemAdmin(
             OrganizationRepository organizationRepository,
-            RegistrationService registrationService
+            OrganizationOnboardingService onboardingService
     ) {
         return args -> {
             try {
-                log.info("🔧 Starting SYSTEM bootstrap...");
+                log.info("Starting SYSTEM bootstrap...");
 
-                // Check if SYSTEM organization already exists
                 if (organizationRepository.existsByYachtName(systemOrgCode)) {
-                    log.info("✓ SYSTEM organization already exists, skipping initialization");
+                    log.info("SYSTEM organization already exists, skipping initialization");
                     return;
                 }
 
-                // Use RegistrationService - creates org + user + reference data automatically
-                RegisterOrganizationRequest request = new RegisterOrganizationRequest(
-                        systemOrgCode,          // organizationName (yacht name)
-                        adminEmail,             // adminEmail
+                RegisterYachtCommand command = new RegisterYachtCommand(
+                        systemOrgCode,          // yachtName
+                        YachtType.OTHER,        // yachtType (system org)
+                        null,                   // yachtLength
+                        systemOrgCountry,       // flagCountry
+                        null,                   // homeMarina
+                        systemOrgName,          // companyName
+                        adminEmail,             // email
                         adminPassword,          // password
-                        "System",               // adminFirstName
-                        "Administrator",        // adminLastName
-                        null,                   // phone (optional)
-                        systemOrgCountry,       // country
-                        null                    // address (optional)
+                        "System",               // firstName
+                        "Administrator",        // lastName
+                        null,                   // phoneNumber
+                        "EUR",                  // baseCurrency
+                        "Europe/Istanbul",      // timezone
+                        1,                      // financialYearStartMonth
+                        null,                   // approvalLimit
+                        false,                  // managerApprovalEnabled
+                        null,                   // selectedMainCategoryIds (null = enable all)
+                        null                    // selectedWhoIds (null = enable all)
                 );
 
-                RegisterOrganizationResponse response = registrationService.registerNewOrganization(request);
+                OnboardingResult result = onboardingService.registerYacht(command);
 
-                log.info("✅ SYSTEM bootstrap completed successfully");
-                log.info("   Organization: {} (ID: {})", systemOrgCode, response.organizationId());
-                log.info("   SUPER_ADMIN: {}", response.adminEmail());
+                log.info("SYSTEM bootstrap completed successfully");
+                log.info("   Organization: {} (ID: {})", systemOrgCode, result.organizationId());
+                log.info("   Admin: {}", result.email());
 
             } catch (Exception e) {
-                log.error("❌ SYSTEM bootstrap failed", e);
+                log.error("SYSTEM bootstrap failed", e);
                 throw new RuntimeException("Failed to initialize system admin", e);
             }
         };

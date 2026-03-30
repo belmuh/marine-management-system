@@ -11,6 +11,8 @@ import com.marine.management.modules.finance.presentation.dto.reports.PeriodBrea
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.marine.management.modules.finance.domain.enums.EntryStatus;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.*;
@@ -62,16 +64,16 @@ public class GeneratePeriodReportUseCase {
         Period period = Period.of(startDate, endDate);
 
         // Fetch carry-over balance: net of all approved entries before this period
-        BigDecimal carryOver = reportRepository.findCarryOverBalance(period.startDate());
+        BigDecimal carryOver = reportRepository.findCarryOverBalance(period.startDate(), EntryStatus.ACTUAL_STATUSES);
 
         // Fetch data from database
         List<FinancialEntryReportRepository.CategoryMonthBreakdownProjection> categoryBreakdowns =
                 reportRepository.findCategoryMonthBreakdownByPeriod(
-                        RecordType.EXPENSE, period.startDate(), period.endDate()
+                        RecordType.EXPENSE, period.startDate(), period.endDate(), EntryStatus.ACTUAL_STATUSES
                 );
 
         List<FinancialEntryReportRepository.MonthlyTotalProjection> monthlyTotals =
-                reportRepository.findMonthlyTotals(period.startDate(), period.endDate());
+                reportRepository.findMonthlyTotals(period.startDate(), period.endDate(), EntryStatus.ACTUAL_STATUSES);
 
         // Build domain model
         PeriodReport report = buildPeriodReport(period, categoryBreakdowns, monthlyTotals, carryOver);
