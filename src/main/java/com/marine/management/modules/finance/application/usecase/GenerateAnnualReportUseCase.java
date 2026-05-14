@@ -1,5 +1,6 @@
 package com.marine.management.modules.finance.application.usecase;
 
+import com.marine.management.modules.finance.application.TenantBaseCurrencyProvider;
 import com.marine.management.modules.finance.application.mapper.AnnualReportMapper;
 import com.marine.management.modules.finance.domain.enums.RecordType;
 import com.marine.management.modules.finance.domain.model.AnnualReport;
@@ -37,17 +38,19 @@ import java.util.Objects;
 public class GenerateAnnualReportUseCase {
 
     private static final int MIN_YEAR = 2000;
-    private static final String DEFAULT_CURRENCY = "EUR"; // TODO: Get from tenant context
 
     private final FinancialEntryReportRepository reportRepository;
     private final AnnualReportMapper annualReportMapper;
+    private final TenantBaseCurrencyProvider tenantBaseCurrencyProvider;
 
     public GenerateAnnualReportUseCase(
             FinancialEntryReportRepository reportRepository,
-            AnnualReportMapper annualReportMapper
+            AnnualReportMapper annualReportMapper,
+            TenantBaseCurrencyProvider tenantBaseCurrencyProvider
     ) {
         this.reportRepository = Objects.requireNonNull(reportRepository);
         this.annualReportMapper = Objects.requireNonNull(annualReportMapper);
+        this.tenantBaseCurrencyProvider = Objects.requireNonNull(tenantBaseCurrencyProvider);
     }
 
     /**
@@ -72,7 +75,8 @@ public class GenerateAnnualReportUseCase {
                 reportRepository.findMonthlyIncomeExpense(year, EntryStatus.ACTUAL_STATUSES);
 
         // Build domain model
-        AnnualReport report = buildAnnualReport(year, categoryBreakdowns, monthlyTotals, carryOver);
+        String baseCurrency = tenantBaseCurrencyProvider.getCurrentTenantBaseCurrency();
+        AnnualReport report = buildAnnualReport(year, categoryBreakdowns, monthlyTotals, carryOver, baseCurrency);
 
         // Map to DTO
         return annualReportMapper.toDto(report);
@@ -85,14 +89,15 @@ public class GenerateAnnualReportUseCase {
             int year,
             List<FinancialEntryReportRepository.CategoryMonthBreakdownProjection> categoryBreakdowns,
             List<FinancialEntryReportRepository.MonthlyIncomeExpenseProjection> monthlyTotals,
-            BigDecimal carryOver
+            BigDecimal carryOver,
+            String currency
     ) {
         List<CategoryYearSummary> summaries = buildCategorySummaries(categoryBreakdowns);
         Map<Integer, MonthlyTotal> totalsMap = buildMonthlyTotals(monthlyTotals, carryOver);
 
         return new AnnualReport(
                 year,
-                DEFAULT_CURRENCY,
+                currency,
                 totalsMap,
                 summaries,
                 carryOver
@@ -124,7 +129,6 @@ public class GenerateAnnualReportUseCase {
                     BigDecimal yearTotal = sumMonthlyValues(monthlyValues);
 
                     return new CategoryYearSummary(
-                            "", // categoryCode not used in current implementation
                             categoryName,
                             monthlyValues,
                             yearTotal

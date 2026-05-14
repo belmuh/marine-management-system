@@ -13,6 +13,7 @@ import com.marine.management.modules.finance.infrastructure.TenantWhoSelectionRe
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
+import java.util.Objects;
 
 /**
  * Factory for creating FinancialEntry domain objects.
@@ -33,17 +34,20 @@ public class FinancialEntryFactory {
     private final FinancialCategoryRepository categoryRepository;
     private final TenantWhoSelectionRepository tenantWhoRepository;
     private final TenantMainCategoryRepository tenantMainCategoryRepository;
+    private final TenantBaseCurrencyProvider tenantBaseCurrencyProvider;
 
     public FinancialEntryFactory(
             FinancialEntryRepository entryRepository,
             FinancialCategoryRepository categoryRepository,
             TenantWhoSelectionRepository tenantWhoRepository,
-            TenantMainCategoryRepository tenantMainCategoryRepository
+            TenantMainCategoryRepository tenantMainCategoryRepository,
+            TenantBaseCurrencyProvider tenantBaseCurrencyProvider
     ) {
         this.entryRepository = entryRepository;
         this.categoryRepository = categoryRepository;
         this.tenantWhoRepository = tenantWhoRepository;
         this.tenantMainCategoryRepository = tenantMainCategoryRepository;
+        this.tenantBaseCurrencyProvider = Objects.requireNonNull(tenantBaseCurrencyProvider);
     }
 
     /**
@@ -66,6 +70,9 @@ public class FinancialEntryFactory {
         // Generate entry number
         EntryNumber entryNumber = generateEntryNumber();
 
+        // Get the tenant's configured base currency
+        String baseCurrency = tenantBaseCurrencyProvider.getCurrentTenantBaseCurrency();
+
         // Create domain object (NO tenant parameter - TenantEntityListener handles it)
         return FinancialEntry.create(
                 entryNumber,
@@ -81,7 +88,8 @@ public class FinancialEntryFactory {
                 command.country(),
                 command.city(),
                 command.specificLocation(),
-                command.vendor()
+                command.vendor(),
+                baseCurrency
         );
     }
 

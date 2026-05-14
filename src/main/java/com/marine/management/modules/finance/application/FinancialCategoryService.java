@@ -3,6 +3,7 @@ package com.marine.management.modules.finance.application;
 import com.marine.management.modules.finance.domain.entities.FinancialCategory;
 import com.marine.management.modules.finance.domain.enums.RecordType;
 import com.marine.management.modules.finance.infrastructure.FinancialCategoryRepository;
+import com.marine.management.modules.users.domain.User;
 import com.marine.management.shared.exceptions.CategoryNotFoundException;
 import com.marine.management.shared.multitenant.TenantContext;
 import org.slf4j.Logger;
@@ -26,7 +27,7 @@ import java.util.UUID;
  * - BaseTenantEntity auto-injects tenant_id on save
  *
  * UNIQUE CONSTRAINTS:
- * - Code uniqueness is per-tenant (tenant_id, code) UNIQUE
+ * - Name uniqueness is per-tenant (tenant_id, name) UNIQUE
  * - Category lookup is tenant-scoped automatically
  *
  * @see FinancialCategory
@@ -54,11 +55,10 @@ public class FinancialCategoryService {
      * TENANT ISOLATION:
      * - tenant_id automatically injected by TenantEntityListener
      * - Code uniqueness checked within current tenant only
-     * - Hibernate filter ensures existsByCode is tenant-scoped
+     * - Hibernate filter ensures existsByName is tenant-scoped
      */
     @Transactional
     public FinancialCategory create(
-            String code,
             String name,
             RecordType categoryType,
             String description,
@@ -69,16 +69,15 @@ public class FinancialCategoryService {
 
         logger.debug("Creating category for tenant: {}", TenantContext.getCurrentTenantId());
 
-        // Check code uniqueness within current tenant
-        if (categoryRepository.existsByCode(code)) {
+        // Check name uniqueness within current tenant
+        if (categoryRepository.existsByName(name.trim())) {
             throw new IllegalArgumentException(
-                    "Category code already exists in your organization: " + code
+                    "Category name already exists in your organization: " + name
             );
         }
 
         // Create category (tenant_id auto-injected)
         FinancialCategory category = FinancialCategory.create(
-                code,
                 name,
                 categoryType,
                 description,
@@ -88,9 +87,9 @@ public class FinancialCategoryService {
 
         FinancialCategory saved = categoryRepository.save(category);
 
-        logger.info("Category created: id={}, code={}, tenant={}",
+        logger.info("Category created: id={}, name='{}', tenant={}",
                 saved.getId(),
-                saved.getCode(),
+                saved.getName(),
                 TenantContext.getCurrentTenantId());
 
         return saved;
@@ -140,9 +139,9 @@ public class FinancialCategoryService {
         FinancialCategory category = getByIdOrThrow(id);
         category.activate();
 
-        logger.info("Category activated: id={}, code={}, tenant={}",
+        logger.info("Category activated: id={}, name='{}', tenant={}",
                 id,
-                category.getCode(),
+                category.getName(),
                 TenantContext.getCurrentTenantId());
 
         return category;
@@ -155,9 +154,9 @@ public class FinancialCategoryService {
         FinancialCategory category = getByIdOrThrow(id);
         category.deactivate();
 
-        logger.info("Category deactivated: id={}, code={}, tenant={}",
+        logger.info("Category deactivated: id={}, name='{}', tenant={}",
                 id,
-                category.getCode(),
+                category.getName(),
                 TenantContext.getCurrentTenantId());
 
         return category;
@@ -171,22 +170,24 @@ public class FinancialCategoryService {
      * - Active categories cannot be deleted (business rule)
      */
     @Transactional
-    public void delete(UUID id) {
+    public void delete(UUID id, User deletedBy) {
         guardTenantContext();
 
         FinancialCategory category = getByIdOrThrow(id);
 
-        if (category.isActive()) {
+        if (category.isEnabled()) {
             throw new IllegalStateException(
-                    "Cannot delete active category. Deactivate first: " + category.getCode()
+                    "Cannot delete active category. Deactivate first: " + category.getName()
             );
         }
 
-        categoryRepository.delete(category);
+        category.softDelete(deletedBy);
+        categoryRepository.save(category);
 
-        logger.info("Category deleted: id={}, code={}, tenant={}",
+        logger.info("Category soft-deleted: id={}, name='{}', by={}, tenant={}",
                 id,
-                category.getCode(),
+                category.getName(),
+                deletedBy.getUsername(),
                 TenantContext.getCurrentTenantId());
     }
 
@@ -206,20 +207,6 @@ public class FinancialCategoryService {
 
         // Auto tenant-filtered
         return categoryRepository.findById(id);
-    }
-
-    /**
-     * Find category by code (tenant-filtered).
-     *
-     * TENANT ISOLATION:
-     * - Code is unique per tenant (not globally)
-     * - Auto tenant-filtered query
-     */
-    public Optional<FinancialCategory> findByCode(String code) {
-        guardTenantContext();
-
-        // Auto tenant-filtered
-        return categoryRepository.findByCode(code);
     }
 
     /**
@@ -265,17 +252,17 @@ public class FinancialCategoryService {
     }
 
     /**
-     * Check if code is unique within current tenant.
+     * Check if name is unique within current tenant.
      *
      * TENANT ISOLATION:
-     * - Code uniqueness is per-tenant
-     * - Same code can exist in different tenants
+     * - Name uniqueness is per-tenant
+     * - Same name can exist in different tenants
      */
-    public boolean isCodeUnique(String code) {
+    public boolean isNameUnique(String name) {
         guardTenantContext();
 
         // Auto tenant-filtered
-        return !categoryRepository.existsByCode(code);
+        return !categoryRepository.existsByName(name);
     }
 
     /**

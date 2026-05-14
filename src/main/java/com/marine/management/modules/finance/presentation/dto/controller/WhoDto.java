@@ -10,7 +10,6 @@ import com.marine.management.modules.finance.domain.entities.Who;
  */
 public record WhoDto(
         Long id,
-        String code,
         String nameTr,
         String nameEn,
         Boolean isTechnical,
@@ -19,7 +18,6 @@ public record WhoDto(
     public static WhoDto from(Who who) {
         return new WhoDto(
                 who.getId(),
-                who.getCode(),
                 who.getNameTr(),
                 who.getNameEn(),
                 who.isTechnical(),

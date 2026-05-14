@@ -208,13 +208,12 @@ public class DemoDataInitializer implements CommandLineRunner {
         for (TenantMainCategory mainCategory : activeMainCategories) {
             for (int i = 0; i < 2; i++) {
                 String suffix = suffixes[i % 2][random.nextInt(suffixes[i % 2].length)];
-                String code = mainCategory.getMainCategory().getCode() + "_" + suffix.toUpperCase();
                 String name = mainCategory.getMainCategory().getNameEn() + " - " + suffix;
 
-                Optional<FinancialCategory> existing = financialCategoryRepository.findByCode(code);
+                Optional<FinancialCategory> existing = financialCategoryRepository.findByName(name);
                 if (existing.isEmpty()) {
                     categories.add(financialCategoryRepository.save(FinancialCategory.create(
-                            code, name, RecordType.EXPENSE, "Demo: " + name, i + 1, true)));
+                            name, RecordType.EXPENSE, "Demo: " + name, i + 1, true)));
                 } else {
                     categories.add(existing.get());
                 }
@@ -381,19 +380,19 @@ public class DemoDataInitializer implements CommandLineRunner {
     private List<FinancialCategory> createIncomeCategoriesIfNeeded() {
         List<FinancialCategory> incomeCategories = new ArrayList<>();
 
-        String[][] incomeCats = {
-                {"CHARTER_INCOME", "Charter Income"},
-                {"REFUND", "Refunds & Returns"},
-                {"EQUIPMENT_SALE", "Equipment Sale"},
-                {"SUBSIDY", "Subsidies & Grants"},
-                {"OTHER_INCOME", "Other Income"}
+        String[] incomeCatNames = {
+                "Charter Income",
+                "Refunds & Returns",
+                "Equipment Sale",
+                "Subsidies & Grants",
+                "Other Income"
         };
 
-        for (String[] cat : incomeCats) {
-            Optional<FinancialCategory> existing = financialCategoryRepository.findByCode(cat[0]);
+        for (String catName : incomeCatNames) {
+            Optional<FinancialCategory> existing = financialCategoryRepository.findByName(catName);
             if (existing.isEmpty()) {
                 incomeCategories.add(financialCategoryRepository.save(
-                        FinancialCategory.create(cat[0], cat[1], RecordType.INCOME, "Demo: " + cat[1], 1, true)
+                        FinancialCategory.create(catName, RecordType.INCOME, "Demo: " + catName, 1, true)
                 ));
             } else {
                 incomeCategories.add(existing.get());

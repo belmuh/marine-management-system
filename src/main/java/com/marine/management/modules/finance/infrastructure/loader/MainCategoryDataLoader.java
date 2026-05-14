@@ -42,27 +42,27 @@ public class MainCategoryDataLoader implements CommandLineRunner {
 
         List<MainCategory> categories = Arrays.asList(
                 // ISS Standard Categories with Budget Guidelines
-                createCategory("CREW_EXPENSES", "Personel Giderleri", "Crew Expenses",
+                createCategory("Personel Giderleri", "Crew Expenses",
                         false, 1, "20%", "30%"),
-                createCategory("MAINTENANCE_REPAIRS", "Bakım ve Onarım", "Maintenance & Repairs",
+                createCategory("Bakım ve Onarım", "Maintenance & Repairs",
                         true, 2, "25%", "35%"),
-                createCategory("DOCKAGE_BERTHS", "Liman ve Bağlama", "Dockage & Berths",
+                createCategory("Liman ve Bağlama", "Dockage & Berths",
                         false, 3, "10%", "15%"),
-                createCategory("FUEL", "Yakıt", "Fuel",
+                createCategory("Yakıt", "Fuel",
                         true, 4, "10%", "20%"),
-                createCategory("INSURANCE", "Sigorta", "Insurance",
+                createCategory("Sigorta", "Insurance",
                         false, 5, "5%", "10%"),
-                createCategory("PROVISIONS", "Kumanya / Erzak", "Provisions",
+                createCategory("Kumanya / Erzak", "Provisions",
                         false, 6, "5%", "10%"),
-                createCategory("ADMINISTRATION", "İdari Giderler", "Administration",
+                createCategory("İdari Giderler", "Administration",
                         false, 7, "3%", "5%")
         );
 
         mainCategoryRepository.saveAll(categories);
 
-        // Store for WHO linking
+        // Store for WHO linking (using English name as key)
         categories.forEach(category -> {
-            DataLoaderSharedData.addMainCategory(category.getCode(), category.getId());
+            DataLoaderSharedData.addMainCategory(category.getNameEn(), category.getId());
         });
 
         logger.info(" ISS standard main categories loaded successfully: {} categories", categories.size());
@@ -77,7 +77,6 @@ public class MainCategoryDataLoader implements CommandLineRunner {
      *
      */
     private MainCategory createCategory(
-            String code,
             String nameTr,
             String nameEn,
             boolean isTechnical,
@@ -86,7 +85,6 @@ public class MainCategoryDataLoader implements CommandLineRunner {
             String budgetMax
     ) {
         return MainCategory.create(
-                code,
                 nameTr,
                 nameEn,
                 isTechnical,

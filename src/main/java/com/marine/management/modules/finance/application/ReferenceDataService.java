@@ -76,11 +76,11 @@ public class ReferenceDataService {
     }
 
     /**
-     * Get tenant main category by global main category code.
+     * Get tenant main category by global main category name (English).
      * Useful for onboarding/initialization.
      */
-    public Optional<TenantMainCategoryDto> getTenantMainCategoryByCode(String code) {
-        return tenantMainCategoryRepository.findByMainCategoryCodeWithMainCategory(code)
+    public Optional<TenantMainCategoryDto> getTenantMainCategoryByNameEn(String nameEn) {
+        return tenantMainCategoryRepository.findByMainCategoryNameEnWithMainCategory(nameEn)
                 .map(TenantMainCategoryDto::from);
     }
 
@@ -134,11 +134,11 @@ public class ReferenceDataService {
     }
 
     /**
-     * Get tenant WHO selection by global WHO code.
+     * Get tenant WHO selection by global WHO name (English).
      * Useful for onboarding/initialization.
      */
-    public Optional<TenantWhoSelectionDto> getTenantWhoSelectionByCode(String code) {
-        return tenantWhoSelectionRepository.findByWhoCodeWithWho(code)
+    public Optional<TenantWhoSelectionDto> getTenantWhoSelectionByNameEn(String nameEn) {
+        return tenantWhoSelectionRepository.findByWhoNameEnWithWho(nameEn)
                 .map(TenantWhoSelectionDto::from);
     }
 
@@ -150,9 +150,9 @@ public class ReferenceDataService {
      * Check if tenant has enabled a specific main category.
      * Note: Uses existence check, no JOIN FETCH needed
      */
-    public boolean isMainCategoryEnabled(String code) {
+    public boolean isMainCategoryEnabled(String nameEn) {
         return tenantMainCategoryRepository
-                .findByMainCategoryCodeWithMainCategory(code)
+                .findByMainCategoryNameEnWithMainCategory(nameEn)
                 .map(TenantMainCategory::isEnabled)
                 .orElse(false);
     }
@@ -161,9 +161,9 @@ public class ReferenceDataService {
      * Check if tenant has enabled a specific WHO selection.
      * Note: Uses existence check, no JOIN FETCH needed
      */
-    public boolean isWhoSelectionEnabled(String code) {
+    public boolean isWhoSelectionEnabled(String nameEn) {
         return tenantWhoSelectionRepository
-                .findByWhoCodeWithWho(code)
+                .findByWhoNameEnWithWho(nameEn)
                 .map(TenantWhoSelection::isEnabled)
                 .orElse(false);
     }

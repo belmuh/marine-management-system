@@ -116,7 +116,6 @@ public class TestDataBuilder {
 
     public static FinancialCategory createCategory(Long tenantId) {
         FinancialCategory category = FinancialCategory.create(
-                "TESTCAT",
                 "Test Category",
                 RecordType.EXPENSE,
                 "Test category for unit tests",

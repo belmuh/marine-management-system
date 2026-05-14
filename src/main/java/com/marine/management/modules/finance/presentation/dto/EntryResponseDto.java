@@ -16,10 +16,9 @@ import java.util.UUID;
 public record EntryResponseDto(
         UUID id,
         String entryNumber,
-        EntryStatus status,  // 🆕 Status
+        EntryStatus status,
         RecordType entryType,
         UUID categoryId,
-        String categoryCode,
         String categoryName,
 
         // Requested amounts
@@ -55,14 +54,13 @@ public record EntryResponseDto(
         Boolean hasAttachments
 ) {
 
-    // JPQL constructor - flat fields (UPDATED)
+    // JPQL constructor - flat fields
     public EntryResponseDto(
             UUID id,
             String entryNumber,
             EntryStatus status,
             RecordType entryType,
             UUID categoryId,
-            String categoryCode,
             String categoryName,
             BigDecimal originalAmountValue,
             String originalCurrency,
@@ -92,7 +90,7 @@ public record EntryResponseDto(
             Boolean hasAttachments
     ) {
         this(
-                id, entryNumber, status, entryType, categoryId, categoryCode, categoryName,
+                id, entryNumber, status, entryType, categoryId, categoryName,
                 new MoneyDto(originalAmountValue.toPlainString(), originalCurrency),
                 new MoneyDto(baseAmountValue.toPlainString(), baseCurrency),
                 approvedBaseAmountValue != null ? new MoneyDto(approvedBaseAmountValue.toPlainString(), approvedBaseCurrency) : null,
@@ -116,7 +114,6 @@ public record EntryResponseDto(
                 entry.getStatus(),
                 entry.getEntryType(),
                 entry.getCategory().getId(),
-                entry.getCategory().getCode(),
                 entry.getCategory().getName(),
                 MoneyDto.from(entry.getOriginalAmount()),
                 MoneyDto.from(entry.getBaseAmount()),

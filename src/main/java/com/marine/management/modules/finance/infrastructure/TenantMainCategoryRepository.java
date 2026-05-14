@@ -34,14 +34,14 @@ public interface TenantMainCategoryRepository extends JpaRepository<TenantMainCa
         """)
     List<TenantMainCategory> findByEnabledTrueAndIsTechnicalWithMainCategory(@Param("technical") boolean technical);
 
-    //  Code ile bulma
+    //  Name ile bulma
     @Query("""
-        SELECT tmc FROM TenantMainCategory tmc 
+        SELECT tmc FROM TenantMainCategory tmc
         JOIN FETCH tmc.mainCategory mc
-        WHERE mc.code = :code
+        WHERE mc.nameEn = :nameEn
         AND tmc.deleted = false
         """)
-    Optional<TenantMainCategory> findByMainCategoryCodeWithMainCategory(@Param("code") String code);
+    Optional<TenantMainCategory> findByMainCategoryNameEnWithMainCategory(@Param("nameEn") String nameEn);
 
     //  MainCategory ID ile bulma
     @Query("""

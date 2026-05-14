@@ -15,20 +15,17 @@ import java.util.UUID;
 @Repository
 public interface FinancialCategoryRepository extends JpaRepository<FinancialCategory, UUID> {
 
-    Optional<FinancialCategory> findByCode(String code);
-
-    //  isActive → enabled
     List<FinancialCategory> findByEnabledTrueOrderByDisplayOrderAsc();
 
     List<FinancialCategory> findAllByOrderByDisplayOrderAsc();
 
-    //  isActive → enabled
     long countByEnabledTrue();
 
-    boolean existsByCode(String code);
+    Optional<FinancialCategory> findByName(String name);
+
+    boolean existsByName(String name);
 
     @Query("SELECT c FROM FinancialCategory c WHERE " +
-            "LOWER(c.code) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
             "LOWER(c.name) LIKE LOWER(CONCAT('%', :searchTerm, '%'))")
     List<FinancialCategory> search(@Param("searchTerm") String searchTerm);
 

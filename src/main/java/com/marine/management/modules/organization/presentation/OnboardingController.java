@@ -174,7 +174,7 @@ public class OnboardingController {
     public ResponseEntity<ReferenceDataPreview> getReferenceData() {
         List<MainCategoryPreview> categories = mainCategoryRepository.findAll().stream()
                 .map(mc -> new MainCategoryPreview(
-                        mc.getId(), mc.getCode(), mc.getNameTr(), mc.getNameEn(),
+                        mc.getId(), mc.getNameTr(), mc.getNameEn(),
                         mc.isTechnical(), mc.getDisplayOrder()
                 ))
                 .sorted((a, b) -> Integer.compare(
@@ -184,7 +184,7 @@ public class OnboardingController {
 
         List<WhoPreview> whoList = whoRepository.findAll().stream()
                 .map(w -> new WhoPreview(
-                        w.getId(), w.getCode(), w.getNameTr(), w.getNameEn(),
+                        w.getId(), w.getNameTr(), w.getNameEn(),
                         w.isTechnical(), w.getDisplayOrder()
                 ))
                 .sorted((a, b) -> Integer.compare(
@@ -269,12 +269,12 @@ public class OnboardingController {
     ) {}
 
     public record MainCategoryPreview(
-            Long id, String code, String nameTr, String nameEn,
+            Long id, String nameTr, String nameEn,
             Boolean technical, Integer displayOrder
     ) {}
 
     public record WhoPreview(
-            Long id, String code, String nameTr, String nameEn,
+            Long id, String nameTr, String nameEn,
             boolean technical, Integer displayOrder
     ) {}
 

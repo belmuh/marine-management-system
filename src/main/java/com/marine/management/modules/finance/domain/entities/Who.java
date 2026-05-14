@@ -19,9 +19,6 @@ public class Who {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true, length = 50)
-    private String code;
-
     @Column(name = "name_tr", nullable = false, length = 100)
     private String nameTr;
 
@@ -44,7 +41,6 @@ public class Who {
 
 
     public static Who create(
-            String code,
             String nameTr,
             String nameEn,
             boolean technical,
@@ -52,10 +48,9 @@ public class Who {
             Long suggestedMainCategoryId
     ) {
         Who who = new Who();
-        who.code = Objects.requireNonNull(code, "Code cannot be null").toUpperCase();
         who.nameTr = Objects.requireNonNull(nameTr, "Turkish name cannot be null");
         who.nameEn = Objects.requireNonNull(nameEn, "English name cannot be null");
-        who.technical = technical;  //  Consistent field name
+        who.technical = technical;
         who.displayOrder = displayOrder;
         who.suggestedMainCategoryId = suggestedMainCategoryId;
 
@@ -69,12 +64,6 @@ public class Who {
     }
 
     private void validate() {
-        if (code == null || code.trim().isEmpty()) {
-            throw new IllegalArgumentException("Code cannot be empty");
-        }
-        if (code.length() > 50) {
-            throw new IllegalArgumentException("Code cannot exceed 50 characters");
-        }
         if (nameTr == null || nameTr.trim().isEmpty()) {
             throw new IllegalArgumentException("Turkish name cannot be empty");
         }
@@ -100,14 +89,6 @@ public class Who {
 
     public Long getId() {
         return id;
-    }
-
-    public String getCode() {
-        return code;
-    }
-
-    public void setCode(String code) {
-        this.code = code;
     }
 
     public String getNameTr() {
@@ -168,6 +149,6 @@ public class Who {
 
     @Override
     public String toString() {
-        return String.format("Who{id=%d, code='%s', nameEn='%s'}", id, code, nameEn);
+        return String.format("Who{id=%d, nameEn='%s'}", id, nameEn);
     }
 }

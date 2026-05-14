@@ -9,9 +9,9 @@ import java.util.Optional;
 
 @Repository
 public interface MainCategoryRepository extends JpaRepository<MainCategory, Long> {
-    Optional<MainCategory> findByCode(String code);
+    Optional<MainCategory> findByNameEn(String nameEn);
 
-    boolean existsByCode(String code);
+    boolean existsByNameEn(String nameEn);
 
     List<MainCategory> findByTechnical(Boolean technical);
 }

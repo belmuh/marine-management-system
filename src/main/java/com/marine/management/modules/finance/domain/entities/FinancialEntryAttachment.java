@@ -3,7 +3,6 @@ package com.marine.management.modules.finance.domain.entities;
 import com.marine.management.modules.finance.domain.enums.AttachmentType;
 import com.marine.management.modules.users.domain.User;
 import jakarta.persistence.*;
-import org.hibernate.envers.Audited;
 import org.hibernate.envers.NotAudited;
 
 import java.time.LocalDateTime;
@@ -27,7 +26,6 @@ import java.util.UUID;
  * @see FinancialEntry
  */
 @Entity
-@Audited
 @Table(
         name = "financial_entry_attachments",
         indexes = {

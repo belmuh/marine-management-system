@@ -196,11 +196,9 @@ public class DataImportService {
     private static class CategoryProcessor {
 
         private final FinancialCategoryRepository categoryRepository;
-        private final CategoryCodeGenerator codeGenerator;
 
         public CategoryProcessor(FinancialCategoryRepository categoryRepository) {
             this.categoryRepository = categoryRepository;
-            this.codeGenerator = new CategoryCodeGenerator();
         }
 
         public Map<String, FinancialCategory> processCategories(
@@ -213,15 +211,12 @@ public class DataImportService {
             for (Map.Entry<String, RecordType> entry : categoryTypeMap.entrySet()) {
                 String categoryName = entry.getKey();
                 RecordType categoryType = entry.getValue();
-                String categoryCode = codeGenerator.generate(categoryName);
 
                 FinancialCategory category = findOrCreateCategory(
-                        categoryName, categoryCode, categoryType, resultBuilder
+                        categoryName, categoryType, resultBuilder
                 );
 
                 categoryMap.put(categoryName, category);
-
-
             }
 
             resultBuilder.categoriesCreated(createdCount);
@@ -230,16 +225,15 @@ public class DataImportService {
 
         private FinancialCategory findOrCreateCategory(
                 String categoryName,
-                String categoryCode,
                 RecordType categoryType,
                 ImportResultDto.Builder resultBuilder
         ) {
-            return categoryRepository.findByCode(categoryCode)
+            return categoryRepository.findByName(categoryName.trim())
                     .map(existingCategory -> validateExistingCategory(
                             existingCategory, categoryName, categoryType, resultBuilder
                     ))
                     .orElseGet(() -> createNewCategory(
-                            categoryName, categoryCode, categoryType
+                            categoryName, categoryType
                     ));
         }
 
@@ -262,14 +256,12 @@ public class DataImportService {
 
         private FinancialCategory createNewCategory(
                 String categoryName,
-                String categoryCode,
                 RecordType categoryType
         ) {
             try {
                 boolean isTechnical = determineIfTechnical(categoryName);
 
                 FinancialCategory newCategory = FinancialCategory.create(
-                        categoryCode,
                         categoryName,
                         categoryType,
                         "Imported from Excel",
@@ -311,22 +303,6 @@ public class DataImportService {
                     categoryName, existingType, suggestedType
             );
             System.out.println(message);
-        }
-    }
-
-    //Generates category codes
-
-    private static class CategoryCodeGenerator {
-
-        public String generate(String categoryName) {
-            return normalize(categoryName)
-                    .toUpperCase()
-                    .replaceAll("_+", "_")
-                    .replaceAll("^_|_$", "");
-        }
-
-        private String normalize(String input) {
-            return input.replaceAll("[^A-Za-z0-9]", "_");
         }
     }
 

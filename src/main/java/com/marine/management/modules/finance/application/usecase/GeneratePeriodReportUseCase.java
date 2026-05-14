@@ -1,5 +1,6 @@
 package com.marine.management.modules.finance.application.usecase;
 
+import com.marine.management.modules.finance.application.TenantBaseCurrencyProvider;
 import com.marine.management.modules.finance.application.mapper.PeriodReportMapper;
 import com.marine.management.modules.finance.domain.enums.RecordType;
 import com.marine.management.modules.finance.domain.model.MonthlyBreakdown;
@@ -35,17 +36,18 @@ import java.util.*;
 @Transactional(readOnly = true)
 public class GeneratePeriodReportUseCase {
 
-    private static final String DEFAULT_CURRENCY = "EUR"; // TODO: Get from tenant context
-
     private final FinancialEntryReportRepository reportRepository;
     private final PeriodReportMapper periodReportMapper;
+    private final TenantBaseCurrencyProvider tenantBaseCurrencyProvider;
 
     public GeneratePeriodReportUseCase(
             FinancialEntryReportRepository reportRepository,
-            PeriodReportMapper periodReportMapper
+            PeriodReportMapper periodReportMapper,
+            TenantBaseCurrencyProvider tenantBaseCurrencyProvider
     ) {
         this.reportRepository = Objects.requireNonNull(reportRepository);
         this.periodReportMapper = Objects.requireNonNull(periodReportMapper);
+        this.tenantBaseCurrencyProvider = Objects.requireNonNull(tenantBaseCurrencyProvider);
     }
 
     /**
@@ -76,7 +78,8 @@ public class GeneratePeriodReportUseCase {
                 reportRepository.findMonthlyTotals(period.startDate(), period.endDate(), EntryStatus.ACTUAL_STATUSES);
 
         // Build domain model
-        PeriodReport report = buildPeriodReport(period, categoryBreakdowns, monthlyTotals, carryOver);
+        String baseCurrency = tenantBaseCurrencyProvider.getCurrentTenantBaseCurrency();
+        PeriodReport report = buildPeriodReport(period, categoryBreakdowns, monthlyTotals, carryOver, baseCurrency);
 
         // Map to DTO
         return periodReportMapper.toDto(report);
@@ -89,7 +92,8 @@ public class GeneratePeriodReportUseCase {
             Period period,
             List<FinancialEntryReportRepository.CategoryMonthBreakdownProjection> categoryBreakdowns,
             List<FinancialEntryReportRepository.MonthlyTotalProjection> monthlyTotals,
-            BigDecimal carryOver
+            BigDecimal carryOver,
+            String currency
     ) {
         List<MonthlyBreakdown> breakdowns = buildCategoryBreakdowns(categoryBreakdowns);
         Map<Integer, MonthlyTotal> totalsMap = buildMonthlyTotals(monthlyTotals, carryOver);
@@ -98,7 +102,7 @@ public class GeneratePeriodReportUseCase {
                 period,
                 breakdowns,
                 totalsMap,
-                DEFAULT_CURRENCY,
+                currency,
                 carryOver
         );
     }

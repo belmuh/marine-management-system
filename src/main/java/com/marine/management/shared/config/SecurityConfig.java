@@ -30,8 +30,10 @@ import java.util.List;
  * - Role-based access control (RBAC)
  *
  * Filter Chain Order:
- * 1. JwtAuthenticationFilter - Authenticates request (before UsernamePasswordAuthenticationFilter)
- * 2. TenantFilter - Extracts tenant context (after authentication completes)
+ * 1. RateLimitFilter  - @Component @Order(HIGHEST_PRECEDENCE) — runs in the servlet chain
+ *                       BEFORE Spring Security. No explicit registration needed here.
+ * 2. JwtAuthenticationFilter - Authenticates request
+ * 3. TenantFilter - Extracts tenant context (after authentication completes)
  */
 @Configuration
 @EnableWebSecurity
@@ -51,7 +53,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))  // Direkt method çağrısı
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
@@ -81,6 +83,11 @@ public class SecurityConfig {
                 .addFilterAfter(tenantFilter, JwtAuthenticationFilter.class)
                 .headers(headers -> headers
                         .frameOptions(frame -> frame.deny())
+                        .contentTypeOptions(cto -> {})              // X-Content-Type-Options: nosniff
+                        .httpStrictTransportSecurity(hsts -> hsts   // HSTS (HTTPS'te aktif olur)
+                                .includeSubDomains(true)
+                                .maxAgeInSeconds(31_536_000)
+                        )
                 );
 
         return http.build();

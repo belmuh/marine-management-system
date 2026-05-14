@@ -10,7 +10,6 @@ import java.util.UUID;
 public record TenantMainCategoryDto(
         UUID id,                    // TenantMainCategory ID
         Long mainCategoryId,        // Global MainCategory ID
-        String code,                // e.g., "FUEL", "CREW_EXPENSES"
         String nameTr,
         String nameEn,
         Boolean technical,
@@ -25,7 +24,6 @@ public record TenantMainCategoryDto(
         return new TenantMainCategoryDto(
                 tenantMainCategory.getId(),
                 mainCategory.getId(),
-                mainCategory.getCode(),
                 mainCategory.getNameTr(),
                 mainCategory.getNameEn(),
                 mainCategory.isTechnical(),

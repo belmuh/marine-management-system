@@ -173,12 +173,15 @@ public class Payment extends BaseTenantEntity {
             throw new IllegalStateException("Entry is required");
         }
 
-        // Payment must be in base currency
-        if (!amount.getCurrencyCode().equals(FinancialEntry.BASE_CURRENCY)) {
-            throw new IllegalStateException(
-                    String.format("Payment must be in base currency (%s), got %s",
-                            FinancialEntry.BASE_CURRENCY, amount.getCurrencyCode())
-            );
+        // Payment must be in the entry's base currency
+        if (entry != null && entry.getBaseAmount() != null) {
+            String entryBaseCurrency = entry.getBaseAmount().getCurrencyCode();
+            if (!amount.getCurrencyCode().equals(entryBaseCurrency)) {
+                throw new IllegalStateException(
+                        String.format("Payment must be in base currency (%s), got %s",
+                                entryBaseCurrency, amount.getCurrencyCode())
+                );
+            }
         }
 
         // Validate tenant consistency

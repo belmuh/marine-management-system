@@ -1,15 +1,20 @@
 package com.marine.management.modules.finance.presentation;
 
 import com.marine.management.modules.finance.application.ApprovalService;
+import com.marine.management.modules.finance.domain.vo.Money;
+import com.marine.management.modules.finance.presentation.dto.EntryApprovalResponseDto;
 import com.marine.management.modules.finance.presentation.dto.EntryResponseDto;
 import com.marine.management.modules.users.domain.User;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -31,6 +36,23 @@ public class EntryApprovalController {
 
     public EntryApprovalController(ApprovalService approvalService) {
         this.approvalService = approvalService;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // APPROVAL HISTORY
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * GET /api/finance/entries/{id}/approvals
+     * Returns the full approval history for a given entry.
+     */
+    @GetMapping("/{id}/approvals")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<EntryApprovalResponseDto>> getApprovalHistory(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal User currentUser
+    ) {
+        return ResponseEntity.ok(approvalService.getApprovalHistory(id, currentUser));
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -85,14 +107,26 @@ public class EntryApprovalController {
 
     /**
      * Approve entry at current level (auto-detect).
+     *
+     * Body is optional. Omit (or set approvedAmount = null) for full approval.
+     * For partial approval at MANAGER level, supply approvedAmount + currency (EUR).
+     * Partial amount is silently ignored at CAPTAIN level (captain always approves full or escalates).
+     *
+     * Example — full: POST /api/finance/entries/{id}/approve  (no body)
+     * Example — partial: POST /api/finance/entries/{id}/approve
+     *   { "approvedAmount": "350.00", "currency": "EUR" }
      */
     @PostMapping("/{id}/approve")
     @PreAuthorize("hasAnyAuthority('ENTRY_APPROVE_CAPTAIN', 'ENTRY_APPROVE_MANAGER')")
     public ResponseEntity<EntryResponseDto> approve(
             @PathVariable UUID id,
+            @RequestBody(required = false) ApproveRequest request,
             @AuthenticationPrincipal User currentUser
     ) {
-        return ResponseEntity.ok(approvalService.approve(id, currentUser));
+        Money approvedAmount = (request != null && request.approvedAmount() != null)
+                ? Money.of(request.approvedAmount(), request.currency() != null ? request.currency() : "EUR")
+                : null;
+        return ResponseEntity.ok(approvalService.approve(id, currentUser, approvedAmount));
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -132,6 +166,18 @@ public class EntryApprovalController {
     // ═══════════════════════════════════════════════════════════════════════════
     // DTOs
     // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Optional body for approve endpoint.
+     * Omit entirely (or leave approvedAmount null) for full approval.
+     * Supply approvedAmount (and optional currency, default EUR) for partial approval at manager level.
+     */
+    public record ApproveRequest(
+            @DecimalMin(value = "0.01", message = "Approved amount must be greater than zero")
+            BigDecimal approvedAmount,
+
+            String currency   // defaults to EUR if omitted
+    ) {}
 
     public record RejectRequest(
             @NotBlank(message = "Rejection reason is required")

@@ -106,10 +106,10 @@ public class TenantWhoSelection extends BaseTenantEntity {
     @Override
     public String toString() {
         return String.format(
-                "TenantWhoSelection{id=%s, tenantId=%s, whoCode='%s', enabled=%s}",
+                "TenantWhoSelection{id=%s, tenantId=%s, whoName='%s', enabled=%s}",
                 id, getTenantId(),
-                who != null ? who.getCode() : "null",
-                enabled  //  Consistent field name
+                who != null ? who.getNameEn() : "null",
+                enabled
         );
     }
 }

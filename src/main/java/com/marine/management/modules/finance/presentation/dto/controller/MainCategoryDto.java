@@ -10,7 +10,6 @@ import com.marine.management.modules.finance.domain.entities.MainCategory;
  */
 public record MainCategoryDto(
         Long id,
-        String code,
         String nameTr,
         String nameEn,
         Boolean isTechnical,
@@ -21,7 +20,6 @@ public record MainCategoryDto(
     public static MainCategoryDto from(MainCategory mainCategory) {
         return new MainCategoryDto(
                 mainCategory.getId(),
-                mainCategory.getCode(),
                 mainCategory.getNameTr(),
                 mainCategory.getNameEn(),
                 mainCategory.isTechnical(),

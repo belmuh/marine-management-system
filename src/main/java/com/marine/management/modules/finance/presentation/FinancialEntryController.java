@@ -1,5 +1,6 @@
 package com.marine.management.modules.finance.presentation;
 
+import com.marine.management.modules.finance.application.EntryHistoryService;
 import com.marine.management.modules.finance.application.FinancialEntryService;
 import com.marine.management.modules.finance.application.mapper.EntryRequestMapper;
 import com.marine.management.modules.finance.domain.enums.EntryStatus;
@@ -16,6 +17,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -24,13 +26,16 @@ import java.util.UUID;
 public class FinancialEntryController {
 
     private final FinancialEntryService entryService;
+    private final EntryHistoryService historyService;
     private final EntryRequestMapper requestMapper;
 
     public FinancialEntryController(
             FinancialEntryService entryService,
+            EntryHistoryService historyService,
             EntryRequestMapper requestMapper
     ) {
         this.entryService = entryService;
+        this.historyService = historyService;
         this.requestMapper = requestMapper;
     }
 
@@ -47,6 +52,48 @@ public class FinancialEntryController {
         var command = requestMapper.toCreateEntryCommand(request, currentUser);
         var dto = entryService.createEntry(command);
         return ResponseEntity.status(HttpStatus.CREATED).body(dto);
+    }
+
+    /**
+     * POST /income — Shorthand for creating an INCOME entry.
+     * Angular omits entryType from the body; this endpoint sets it automatically.
+     */
+    @PostMapping("/income")
+    @PreAuthorize("hasAuthority('ENTRY_CREATE')")
+    public ResponseEntity<EntryResponseDto> createIncome(
+            @Valid @RequestBody CreateEntryRequest request,
+            @AuthenticationPrincipal User currentUser
+    ) {
+        var typed = new CreateEntryRequest(
+                com.marine.management.modules.finance.domain.enums.RecordType.INCOME,
+                request.categoryId(), request.amount(), request.currency(),
+                request.entryDate(), request.paymentMethod(), request.description(),
+                request.whoId(), request.mainCategoryId(), request.recipient(),
+                request.country(), request.city(), request.specificLocation(), request.vendor()
+        );
+        var command = requestMapper.toCreateEntryCommand(typed, currentUser);
+        return ResponseEntity.status(HttpStatus.CREATED).body(entryService.createEntry(command));
+    }
+
+    /**
+     * POST /expense — Shorthand for creating an EXPENSE entry.
+     * Angular omits entryType from the body; this endpoint sets it automatically.
+     */
+    @PostMapping("/expense")
+    @PreAuthorize("hasAuthority('ENTRY_CREATE')")
+    public ResponseEntity<EntryResponseDto> createExpense(
+            @Valid @RequestBody CreateEntryRequest request,
+            @AuthenticationPrincipal User currentUser
+    ) {
+        var typed = new CreateEntryRequest(
+                com.marine.management.modules.finance.domain.enums.RecordType.EXPENSE,
+                request.categoryId(), request.amount(), request.currency(),
+                request.entryDate(), request.paymentMethod(), request.description(),
+                request.whoId(), request.mainCategoryId(), request.recipient(),
+                request.country(), request.city(), request.specificLocation(), request.vendor()
+        );
+        var command = requestMapper.toCreateEntryCommand(typed, currentUser);
+        return ResponseEntity.status(HttpStatus.CREATED).body(entryService.createEntry(command));
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -99,6 +146,21 @@ public class FinancialEntryController {
     @GetMapping("/search")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Page<EntryResponseDto>> search(
+            @Valid EntrySearchRequest request,
+            @AuthenticationPrincipal User currentUser
+    ) {
+        var criteria = requestMapper.toSearchCriteria(request);
+        return ResponseEntity.ok(entryService.search(criteria, currentUser));
+    }
+
+    /**
+     * GET /search/text — Full-text search across all entries.
+     * Angular calls this when a searchTerm is present in the search bar.
+     * Delegates to the generic search with the same criteria.
+     */
+    @GetMapping("/search/text")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Page<EntryResponseDto>> searchByText(
             @Valid EntrySearchRequest request,
             @AuthenticationPrincipal User currentUser
     ) {
@@ -197,6 +259,19 @@ public class FinancialEntryController {
         var command = requestMapper.toDeleteEntryCommand(id, currentUser);
         entryService.deleteEntry(command);
         return ResponseEntity.noContent().build();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // HISTORY (unified timeline: approvals + revisions)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    @GetMapping("/{id}/history")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<EntryHistoryItemDto>> getHistory(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal User currentUser
+    ) {
+        return ResponseEntity.ok(historyService.getHistory(id, currentUser));
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

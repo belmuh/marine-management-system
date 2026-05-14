@@ -3,6 +3,7 @@ package com.marine.management.modules.finance.application;
 import com.marine.management.modules.finance.domain.entities.FinancialEntry;
 import com.marine.management.modules.finance.domain.enums.EntryStatus;
 import com.marine.management.modules.finance.infrastructure.FinancialEntryRepository;
+import com.marine.management.modules.finance.presentation.dto.EntryApprovalResponseDto;
 import com.marine.management.modules.finance.presentation.dto.EntryResponseDto;
 import com.marine.management.modules.organization.domain.Organization;
 import com.marine.management.modules.users.domain.User;
@@ -18,6 +19,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.marine.management.modules.finance.domain.vo.Money;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -210,11 +212,14 @@ public class ApprovalService {
 // ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * Manager (or Captain) approves entry at manager level.
+     * Manager (or Captain) approves entry at manager level — full or partial.
      * PENDING_MANAGER → APPROVED (and sets approvedBaseAmount)
+     *
+     * @param approvedAmount null = full approval (approvedAmount = entry.baseAmount).
+     *                       Non-null = partial approval; must be in EUR and ≤ baseAmount.
      */
     @Transactional
-    public EntryResponseDto approveByManager(UUID entryId, User approver) {
+    public EntryResponseDto approveByManager(UUID entryId, User approver, Money approvedAmount) {
         guardTenantContext();
         verifyUserBelongsToCurrentTenant(approver);
 
@@ -227,11 +232,19 @@ public class ApprovalService {
 
         accessPolicy.checkApproveAccess(entry, approver);
 
-        // Entity handles status transition and approvedBaseAmount setting
-        entry.approveByManager(); // ✅ User parameter removed
+        boolean isPartial = approvedAmount != null
+                && approvedAmount.isLessThan(entry.getBaseAmount());
 
-        logger.info("Entry approved at manager level: id={}, approver={}, role={}",
-                entryId, approver.getEmail(), approver.getRoleEnum());
+        // Entity handles status transition and approvedBaseAmount setting
+        entry.approveByManager(approvedAmount);
+
+        if (isPartial) {
+            logger.info("Entry partially approved at manager level: id={}, approver={}, approvedAmount={}",
+                    entryId, approver.getEmail(), approvedAmount);
+        } else {
+            logger.info("Entry fully approved at manager level: id={}, approver={}, role={}",
+                    entryId, approver.getEmail(), approver.getRoleEnum());
+        }
 
         return EntryResponseDto.fromWithUser(entry, approver.getFullName());
     }
@@ -241,11 +254,24 @@ public class ApprovalService {
 // ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * Approve entry at current level (Captain or Manager).
-     * Automatically determines the correct approval action.
+     * Approve entry at current level (Captain = always full; Manager = full).
+     * Use {@link #approve(UUID, User, Money)} to pass a partial amount for manager level.
      */
     @Transactional
     public EntryResponseDto approve(UUID entryId, User approver) {
+        return approve(entryId, approver, null);
+    }
+
+    /**
+     * Approve entry at current level (Captain or Manager).
+     * Automatically determines the correct approval action.
+     *
+     * @param approvedAmount Only relevant for manager-level approval.
+     *                       null = full approval. Non-null = partial (must be ≤ baseAmount, in EUR).
+     *                       Ignored at captain level (captain always approves the full amount or escalates).
+     */
+    @Transactional
+    public EntryResponseDto approve(UUID entryId, User approver, Money approvedAmount) {
         guardTenantContext();
         verifyUserBelongsToCurrentTenant(approver);
 
@@ -253,7 +279,7 @@ public class ApprovalService {
 
         return switch (entry.getStatus()) {
             case PENDING_CAPTAIN -> approveByCaptain(entryId, approver);
-            case PENDING_MANAGER -> approveByManager(entryId, approver);
+            case PENDING_MANAGER -> approveByManager(entryId, approver, approvedAmount);
             default -> throw new IllegalStateException("Entry is not pending approval");
         };
     }
@@ -351,6 +377,23 @@ public class ApprovalService {
         if (!currentTenantId.equals(userTenantId)) {
             throw new AccessDeniedException("User does not belong to current tenant");
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // APPROVAL HISTORY
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Returns the approval history for a given entry.
+     * Accessible to any authenticated user who belongs to the same tenant.
+     */
+    public List<EntryApprovalResponseDto> getApprovalHistory(UUID entryId, User currentUser) {
+        guardTenantContext();
+        FinancialEntry entry = findEntryOrThrow(entryId);
+        return entry.getApprovals().stream()
+                .sorted(Comparator.comparing(a -> a.getApprovalLevel().ordinal()))
+                .map(EntryApprovalResponseDto::from)
+                .toList();
     }
 
     private FinancialEntry findEntryOrThrow(UUID id) {

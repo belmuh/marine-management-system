@@ -8,19 +8,16 @@ import java.util.UUID;
  */
 public record PivotReportProjection(
         Long mainCategoryId,
-        String mainCategoryCode,
         String mainCategoryNameTr,
         String mainCategoryNameEn,
         Boolean mainCategoryTechnical,
         UUID categoryId,
-        String categoryCode,
         String categoryName,
         Boolean categoryTechnical,
         Long whoId,
-        String whoCode,
         String whoNameTr,
         String whoNameEn,
         Boolean whoTechnical,
-        Integer month,           // ⭐ Aylık breakdown için
+        Integer month,
         BigDecimal totalAmount
 ) {}

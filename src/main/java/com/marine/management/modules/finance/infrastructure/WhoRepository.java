@@ -9,9 +9,9 @@ import java.util.Optional;
 
 @Repository
 public interface WhoRepository extends JpaRepository<Who, Long> {
-    Optional<Who> findByCode(String code);
+    Optional<Who> findByNameEn(String nameEn);
 
-    boolean existsByCode(String code);
+    boolean existsByNameEn(String nameEn);
 
     List<Who> findByTechnical(Boolean isTechnical);
 

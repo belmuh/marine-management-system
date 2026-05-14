@@ -7,10 +7,12 @@ import com.marine.management.modules.finance.infrastructure.FinancialCategoryRep
 import com.marine.management.modules.finance.presentation.dto.CategoryRequestDto;
 import com.marine.management.modules.finance.presentation.dto.CategoryResponseDto;
 import com.marine.management.modules.finance.presentation.dto.CategoryWithUsageDto;
+import com.marine.management.modules.users.domain.User;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -31,7 +33,6 @@ public class FinancialCategoryController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<CategoryResponseDto> create(@Valid @RequestBody CategoryRequestDto request) {
         FinancialCategory category = categoryService.create(
-                request.code(),
                 request.name(),
                 request.categoryType(),
                 request.description(),
@@ -47,14 +48,6 @@ public class FinancialCategoryController {
     @GetMapping("/{id}")
     public ResponseEntity<CategoryResponseDto> getById(@PathVariable UUID id) {
         return categoryService.findById(id)
-                .map(CategoryResponseDto::from)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
-    }
-
-    @GetMapping("/code/{code}")
-    public ResponseEntity<CategoryResponseDto> getByCode(@PathVariable String code) {
-        return categoryService.findByCode(code)
                 .map(CategoryResponseDto::from)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -149,22 +142,25 @@ public class FinancialCategoryController {
         return ResponseEntity.ok(CategoryResponseDto.from(category));
     }
 
-    // DELETE
+    // DELETE (soft delete)
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Void> delete(@PathVariable UUID id) {
-        categoryService.delete(id);
+    public ResponseEntity<Void> delete(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal User currentUser
+    ) {
+        categoryService.delete(id, currentUser);
         return ResponseEntity.noContent().build();
     }
 
     // VALIDATION
-    @GetMapping("/validate/code")
-    public ResponseEntity<ValidationResponse> validateCode(
-            @RequestParam String code
+    @GetMapping("/validate/name")
+    public ResponseEntity<ValidationResponse> validateName(
+            @RequestParam String name
     ) {
-        boolean isUnique = categoryService.isCodeUnique(code);
+        boolean isUnique = categoryService.isNameUnique(name);
         return ResponseEntity.ok(new ValidationResponse(isUnique,
-                isUnique ? "Code is available" : "Code already exists"));
+                isUnique ? "Name is available" : "Name already exists"));
     }
 
 

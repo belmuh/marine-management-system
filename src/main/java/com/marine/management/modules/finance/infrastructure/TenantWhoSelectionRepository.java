@@ -45,14 +45,14 @@ public interface TenantWhoSelectionRepository extends JpaRepository<TenantWhoSel
         """)
     List<TenantWhoSelection> findBySuggestedMainCategoryWithWho(@Param("mainCategoryId") Long mainCategoryId);
 
-    // Code ile bulma
+    // Name ile bulma
     @Query("""
-        SELECT tws FROM TenantWhoSelection tws 
+        SELECT tws FROM TenantWhoSelection tws
         JOIN FETCH tws.who w
-        WHERE w.code = :code
+        WHERE w.nameEn = :nameEn
         AND tws.deleted = false
         """)
-    Optional<TenantWhoSelection> findByWhoCodeWithWho(@Param("code") String code);
+    Optional<TenantWhoSelection> findByWhoNameEnWithWho(@Param("nameEn") String nameEn);
 
     // Who ID ile bulma
     @Query("""

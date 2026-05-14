@@ -220,7 +220,7 @@ class ApprovalServiceTest {
     // ============================================
 
     @Test
-    void shouldApproveByManager() {
+    void shouldApproveByManager_FullAmount() {
         // Given
         when(entryRepository.findById(pendingManagerEntry.getEntryId()))
                 .thenReturn(Optional.of(pendingManagerEntry));
@@ -228,13 +228,50 @@ class ApprovalServiceTest {
 
         Money originalAmount = pendingManagerEntry.getBaseAmount();
 
-        // When
-        var result = approvalService.approveByManager(pendingManagerEntry.getEntryId(), manager);
+        // When - full approval (null = use baseAmount)
+        var result = approvalService.approveByManager(pendingManagerEntry.getEntryId(), manager, null);
 
         // Then
         assertThat(result).isNotNull();
         assertThat(pendingManagerEntry.getStatus()).isEqualTo(EntryStatus.APPROVED);
         assertThat(pendingManagerEntry.getApprovedBaseAmount()).isEqualTo(originalAmount);
+    }
+
+    @Test
+    void shouldApproveByManager_PartialAmount() {
+        // Given — entry has 600 EUR, manager approves only 400 EUR
+        Money entryAmount = Money.of("600.00", "EUR");
+        Money partialAmount = Money.of("400.00", "EUR");
+        FinancialEntry entry = TestDataBuilder.createPendingManagerEntryWithAmount(crew, entryAmount);
+
+        when(entryRepository.findById(entry.getEntryId())).thenReturn(Optional.of(entry));
+        doNothing().when(accessPolicy).checkApproveAccess(any(), any());
+
+        // When
+        var result = approvalService.approveByManager(entry.getEntryId(), manager, partialAmount);
+
+        // Then
+        assertThat(result).isNotNull();
+        assertThat(entry.getStatus()).isEqualTo(EntryStatus.APPROVED);
+        assertThat(entry.getApprovedBaseAmount()).isEqualTo(partialAmount);
+    }
+
+    @Test
+    void shouldThrowException_WhenPartialAmountExceedsBaseAmount() {
+        // Given — manager tries to approve MORE than the entry amount
+        Money entryAmount = Money.of("300.00", "EUR");
+        Money tooMuch = Money.of("500.00", "EUR");
+        FinancialEntry entry = TestDataBuilder.createPendingManagerEntryWithAmount(crew, entryAmount);
+
+        when(entryRepository.findById(entry.getEntryId())).thenReturn(Optional.of(entry));
+        doNothing().when(accessPolicy).checkApproveAccess(any(), any());
+
+        // When/Then
+        assertThatThrownBy(() ->
+                approvalService.approveByManager(entry.getEntryId(), manager, tooMuch)
+        )
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("cannot exceed requested amount");
     }
 
     @Test
@@ -245,7 +282,7 @@ class ApprovalServiceTest {
         doNothing().when(accessPolicy).checkApproveAccess(any(), any());
 
         // When
-        var result = approvalService.approveByManager(pendingManagerEntry.getEntryId(), captain);
+        var result = approvalService.approveByManager(pendingManagerEntry.getEntryId(), captain, null);
 
         // Then
         assertThat(result).isNotNull();
@@ -262,7 +299,7 @@ class ApprovalServiceTest {
 
         // When/Then
         assertThatThrownBy(() ->
-                approvalService.approveByManager(pendingManagerEntry.getEntryId(), crew)
+                approvalService.approveByManager(pendingManagerEntry.getEntryId(), crew, null)
         )
                 .isInstanceOf(AccessDeniedException.class)
                 .hasMessageContaining("manager approval permission");
@@ -276,7 +313,7 @@ class ApprovalServiceTest {
 
         // When/Then
         assertThatThrownBy(() ->
-                approvalService.approveByManager(pendingCaptainEntry.getEntryId(), manager)
+                approvalService.approveByManager(pendingCaptainEntry.getEntryId(), manager, null)
         )
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("not pending manager approval");
@@ -302,18 +339,37 @@ class ApprovalServiceTest {
     }
 
     @Test
-    void shouldAutoDetectManagerLevel() {
+    void shouldAutoDetectManagerLevel_FullApproval() {
         // Given
         when(entryRepository.findById(pendingManagerEntry.getEntryId()))
                 .thenReturn(Optional.of(pendingManagerEntry));
         doNothing().when(accessPolicy).checkApproveAccess(any(), any());
 
-        // When
+        // When — no amount supplied → full approval
         var result = approvalService.approve(pendingManagerEntry.getEntryId(), manager);
 
         // Then
         assertThat(result).isNotNull();
         assertThat(pendingManagerEntry.getStatus()).isEqualTo(EntryStatus.APPROVED);
+    }
+
+    @Test
+    void shouldAutoDetectManagerLevel_PartialApproval() {
+        // Given
+        Money entryAmount = Money.of("800.00", "EUR");
+        Money partialAmount = Money.of("500.00", "EUR");
+        FinancialEntry entry = TestDataBuilder.createPendingManagerEntryWithAmount(crew, entryAmount);
+
+        when(entryRepository.findById(entry.getEntryId())).thenReturn(Optional.of(entry));
+        doNothing().when(accessPolicy).checkApproveAccess(any(), any());
+
+        // When — partial amount supplied
+        var result = approvalService.approve(entry.getEntryId(), manager, partialAmount);
+
+        // Then
+        assertThat(result).isNotNull();
+        assertThat(entry.getStatus()).isEqualTo(EntryStatus.APPROVED);
+        assertThat(entry.getApprovedBaseAmount()).isEqualTo(partialAmount);
     }
 
     @Test

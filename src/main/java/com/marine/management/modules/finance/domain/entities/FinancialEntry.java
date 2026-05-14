@@ -9,6 +9,8 @@ import com.marine.management.modules.finance.domain.vo.Money;
 import com.marine.management.shared.domain.BaseTenantEntity;
 import com.marine.management.shared.exceptions.ExchangeRateCalculationException;
 import jakarta.persistence.*;
+import org.hibernate.envers.AuditOverride;
+import org.hibernate.envers.AuditOverrides;
 import org.hibernate.envers.Audited;
 import org.hibernate.envers.NotAudited;
 import org.hibernate.envers.RelationTargetAuditMode;
@@ -32,6 +34,15 @@ import java.util.*;
  */
 @Entity
 @Audited
+@AuditOverrides({
+        @AuditOverride(name = "version", isAudited = false),
+        @AuditOverride(name = "deleted", isAudited = false),
+        @AuditOverride(name = "deletedAt", isAudited = false),
+        @AuditOverride(name = "deletedById", isAudited = false),
+        @AuditOverride(name = "updatedAt", isAudited = false),
+        @AuditOverride(name = "updatedById", isAudited = false),
+        @AuditOverride(name = "tenantId", isAudited = false)
+})
 @Table(
         name = "financial_entries",
         uniqueConstraints = {
@@ -55,7 +66,6 @@ import java.util.*;
 public class FinancialEntry extends BaseTenantEntity {
 
     private static final Logger logger = LoggerFactory.getLogger(FinancialEntry.class);
-    public static final String BASE_CURRENCY = "EUR";
 
     // ═══════════════════════════════════════════════════════════════════════════
     // FIELDS
@@ -134,6 +144,7 @@ public class FinancialEntry extends BaseTenantEntity {
     @JoinColumn(name = "tenant_main_category_id")
     private TenantMainCategory tenantMainCategory;
 
+    @NotAudited
     @Column(name = "recipient", length = 50)
     private String recipient;
 
@@ -181,8 +192,8 @@ public class FinancialEntry extends BaseTenantEntity {
     @Column(name = "rejection_reason", length = 500)
     private String rejectionReason;
 
-    // Attachments
-    @Audited(targetAuditMode = RelationTargetAuditMode.NOT_AUDITED)
+    // Attachments — tracked separately, no need to audit collection changes
+    @NotAudited
     @OneToMany(mappedBy = "entry", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<FinancialEntryAttachment> attachments = new ArrayList<>();
 
@@ -216,7 +227,8 @@ public class FinancialEntry extends BaseTenantEntity {
             String country,
             String city,
             String specificLocation,
-            String vendor
+            String vendor,
+            String baseCurrency
     ) {
         Objects.requireNonNull(entryNumber, "Entry number cannot be null");
         Objects.requireNonNull(entryType, "Entry type cannot be null");
@@ -224,6 +236,7 @@ public class FinancialEntry extends BaseTenantEntity {
         Objects.requireNonNull(amount, "Amount cannot be null");
         Objects.requireNonNull(entryDate, "Entry date cannot be null");
         Objects.requireNonNull(paymentMethod, "Payment method cannot be null");
+        Objects.requireNonNull(baseCurrency, "Base currency cannot be null");
 
         FinancialEntry entry = new FinancialEntry();
         entry.entryNumber = entryNumber;
@@ -232,8 +245,8 @@ public class FinancialEntry extends BaseTenantEntity {
         entry.category = category;
         entry.originalAmount = amount;
         entry.baseAmount = amount;
-        entry.approvedBaseAmount = Money.zero(BASE_CURRENCY);
-        entry.paidBaseAmount = Money.zero(BASE_CURRENCY);
+        entry.approvedBaseAmount = Money.zero(baseCurrency);
+        entry.paidBaseAmount = Money.zero(baseCurrency);
         entry.entryDate = entryDate;
         entry.paymentMethod = paymentMethod;
         entry.description = description;
@@ -255,11 +268,12 @@ public class FinancialEntry extends BaseTenantEntity {
 
     @PrePersist
     protected void onPrePersist() {
+        String baseCurrency = baseAmount != null ? baseAmount.getCurrencyCode() : "EUR";
         if (approvedBaseAmount == null) {
-            approvedBaseAmount = Money.zero(BASE_CURRENCY);
+            approvedBaseAmount = Money.zero(baseCurrency);
         }
         if (paidBaseAmount == null) {
-            paidBaseAmount = Money.zero(BASE_CURRENCY);
+            paidBaseAmount = Money.zero(baseCurrency);
         }
         validate();
     }
@@ -331,17 +345,37 @@ public class FinancialEntry extends BaseTenantEntity {
     }
 
     /**
-     * Approve at manager level.
+     * Approve at manager level — full approval (approvedAmount = baseAmount).
      * PENDING_MANAGER → APPROVED
      *
      * Note: updatedById is automatically set by AuditingEntityListener
      */
     public void approveByManager() {
+        approveByManager(null);
+    }
+
+    /**
+     * Approve at manager level — full or partial.
+     * PENDING_MANAGER → APPROVED
+     *
+     * @param approvedAmount Amount to approve. null or equal to baseAmount = full approval.
+     *                       Less than baseAmount = partial approval.
+     *                       Cannot exceed baseAmount.
+     * Note: updatedById is automatically set by AuditingEntityListener
+     */
+    public void approveByManager(Money approvedAmount) {
         if (this.status != EntryStatus.PENDING_MANAGER) {
             throw new IllegalStateException("Entry is not pending manager approval");
         }
+        Money toApprove = (approvedAmount == null) ? this.baseAmount : approvedAmount;
+        if (toApprove.isGreaterThan(this.baseAmount)) {
+            throw new IllegalArgumentException(
+                    String.format("Approved amount (%s) cannot exceed requested amount (%s)",
+                            toApprove, this.baseAmount)
+            );
+        }
         this.status = EntryStatus.APPROVED;
-        this.approvedBaseAmount = this.baseAmount;
+        this.approvedBaseAmount = toApprove;
     }
 
     /**
@@ -376,8 +410,10 @@ public class FinancialEntry extends BaseTenantEntity {
     public void recordPayment(Money paymentAmount) {
         Objects.requireNonNull(paymentAmount, "Payment amount cannot be null");
 
-        if (!paymentAmount.getCurrencyCode().equals(BASE_CURRENCY)) {
-            throw new IllegalArgumentException("Payment amount must be in base currency (EUR)");
+        String baseCurrency = this.baseAmount.getCurrencyCode();
+        if (!paymentAmount.getCurrencyCode().equals(baseCurrency)) {
+            throw new IllegalArgumentException(
+                    "Payment amount must be in base currency (" + baseCurrency + ")");
         }
 
         if (!this.status.isApproved()) {
@@ -407,8 +443,10 @@ public class FinancialEntry extends BaseTenantEntity {
     public void reversePayment(Money paymentAmount) {
         Objects.requireNonNull(paymentAmount, "Payment amount cannot be null");
 
-        if (!paymentAmount.getCurrencyCode().equals(BASE_CURRENCY)) {
-            throw new IllegalArgumentException("Payment amount must be in base currency (EUR)");
+        String baseCurrency = this.baseAmount.getCurrencyCode();
+        if (!paymentAmount.getCurrencyCode().equals(baseCurrency)) {
+            throw new IllegalArgumentException(
+                    "Payment amount must be in base currency (" + baseCurrency + ")");
         }
 
         if (!this.status.allowsPaymentReversal()) {
@@ -513,10 +551,11 @@ public class FinancialEntry extends BaseTenantEntity {
     // EXCHANGE RATE
     // ═══════════════════════════════════════════════════════════════════════════
 
-    public void calculateBaseAmount(ExchangeRateService exchangeRateService) {
+    public void calculateBaseAmount(ExchangeRateService exchangeRateService, String baseCurrency) {
         Objects.requireNonNull(exchangeRateService, "Exchange rate service cannot be null");
+        Objects.requireNonNull(baseCurrency, "Base currency cannot be null");
 
-        if (this.originalAmount.isEuro()) {
+        if (this.originalAmount.isCurrency(baseCurrency)) {
             this.baseAmount = this.originalAmount;
             this.exchangeRate = BigDecimal.ONE;
             this.exchangeRateDate = this.entryDate;
@@ -527,10 +566,10 @@ public class FinancialEntry extends BaseTenantEntity {
             BigDecimal rate = exchangeRateService.getRate(
                     this.entryDate,
                     this.originalAmount.getCurrencyCode(),
-                    BASE_CURRENCY
+                    baseCurrency
             );
 
-            this.baseAmount = this.originalAmount.convertUsing(rate, BASE_CURRENCY);
+            this.baseAmount = this.originalAmount.convertUsing(rate, baseCurrency);
             this.exchangeRate = rate;
             this.exchangeRateDate = this.entryDate;
 
@@ -547,8 +586,9 @@ public class FinancialEntry extends BaseTenantEntity {
         }
         this.exchangeRate = rate;
         this.exchangeRateDate = rateDate;
-        if (originalAmount != null && !originalAmount.isEuro()) {
-            this.baseAmount = this.originalAmount.convertUsing(rate, BASE_CURRENCY);
+        if (originalAmount != null && baseAmount != null
+                && !originalAmount.isCurrency(baseAmount.getCurrencyCode())) {
+            this.baseAmount = this.originalAmount.convertUsing(rate, baseAmount.getCurrencyCode());
         }
     }
 
@@ -587,7 +627,8 @@ public class FinancialEntry extends BaseTenantEntity {
 
     public Money getRemainingAmount() {
         if (approvedBaseAmount == null) {
-            return Money.zero(BASE_CURRENCY);
+            String currency = baseAmount != null ? baseAmount.getCurrencyCode() : "EUR";
+            return Money.zero(currency);
         }
         return approvedBaseAmount.subtract(paidBaseAmount);
     }
@@ -661,7 +702,7 @@ public class FinancialEntry extends BaseTenantEntity {
             errors.add("Amount must be positive");
         }
         if (category == null) errors.add("Category is required");
-        if (category != null && !category.isActive()) errors.add("Category must be active");
+        if (category != null && !category.isEnabled()) errors.add("Category must be active");
         if (entryDate == null) errors.add("Entry date is required");
         if (entryDate != null && entryDate.isAfter(LocalDate.now())) {
             errors.add("Entry date cannot be in the future");

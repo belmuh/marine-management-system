@@ -37,13 +37,32 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
             @Param("statuses") Set<EntryStatus> statuses
     );
 
+    /**
+     * Period totals filtered by crew member (for crew dashboard view).
+     * When crewMemberId is null, returns totals for all entries.
+     */
+    @Query("""
+        SELECT e.entryType as entryType,
+               SUM(e.baseAmount.amount) as total
+        FROM FinancialEntry e
+        WHERE e.entryDate BETWEEN :start AND :end
+        AND e.status IN :statuses
+        AND (:crewMemberId IS NULL OR e.createdById = :crewMemberId)
+        GROUP BY e.entryType
+    """)
+    List<PeriodTotalProjection> findPeriodTotalsForCrew(
+            @Param("start") LocalDate start,
+            @Param("end") LocalDate end,
+            @Param("statuses") Set<EntryStatus> statuses,
+            @Param("crewMemberId") UUID crewMemberId
+    );
+
     // ============================================
     // CATEGORY REPORTS
     // ============================================
 
     @Query("""
         SELECT c.id as categoryId,
-               c.code as categoryCode,
                c.name as categoryName,
                c.technical as technical,
                SUM(e.baseAmount.amount) as total,
@@ -53,7 +72,7 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
         WHERE e.entryType = :entryType
         AND e.entryDate BETWEEN :start AND :end
         AND e.status IN :statuses
-        GROUP BY c.id, c.code, c.name, c.technical
+        GROUP BY c.id, c.name, c.technical
         ORDER BY SUM(e.baseAmount.amount) DESC
     """)
     List<CategoryTotalProjection> findCategoryTotals(
@@ -61,6 +80,33 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
             @Param("start") LocalDate start,
             @Param("end") LocalDate end,
             @Param("statuses") Set<EntryStatus> statuses
+    );
+
+    /**
+     * Category totals filtered by crew member.
+     * When crewMemberId is null, returns totals for all entries.
+     */
+    @Query("""
+        SELECT c.id as categoryId,
+               c.name as categoryName,
+               c.technical as technical,
+               SUM(e.baseAmount.amount) as total,
+               COUNT(e.id) as entryCount
+        FROM FinancialEntry e
+        JOIN e.category c
+        WHERE e.entryType = :entryType
+        AND e.entryDate BETWEEN :start AND :end
+        AND e.status IN :statuses
+        AND (:crewMemberId IS NULL OR e.createdById = :crewMemberId)
+        GROUP BY c.id, c.name, c.technical
+        ORDER BY SUM(e.baseAmount.amount) DESC
+    """)
+    List<CategoryTotalProjection> findCategoryTotalsForCrew(
+            @Param("entryType") RecordType entryType,
+            @Param("start") LocalDate start,
+            @Param("end") LocalDate end,
+            @Param("statuses") Set<EntryStatus> statuses,
+            @Param("crewMemberId") UUID crewMemberId
     );
 
     default List<CategoryTotalProjection> findExpenseTotals(LocalDate start, LocalDate end, Set<EntryStatus> statuses) {
@@ -71,13 +117,16 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
         return findCategoryTotals(RecordType.INCOME, start, end, statuses);
     }
 
+    default List<CategoryTotalProjection> findExpenseTotalsForCrew(LocalDate start, LocalDate end, Set<EntryStatus> statuses, UUID crewMemberId) {
+        return findCategoryTotalsForCrew(RecordType.EXPENSE, start, end, statuses, crewMemberId);
+    }
+
     // ============================================
     // WHO REPORTS
     // ============================================
 
     @Query("""
         SELECT w.id as whoId,
-               w.code as whoCode,
                w.nameTr as whoNameTr,
                w.nameEn as whoNameEn,
                w.technical as technical,
@@ -89,7 +138,7 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
         WHERE e.entryType = :entryType
         AND e.entryDate BETWEEN :start AND :end
         AND e.status IN :statuses
-        GROUP BY w.id, w.code, w.nameTr, w.nameEn, w.technical
+        GROUP BY w.id, w.nameTr, w.nameEn, w.technical
         ORDER BY SUM(e.baseAmount.amount) DESC
     """)
     List<WhoTotalProjection> findWhoTotals(
@@ -105,7 +154,6 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
 
     @Query("""
         SELECT mc.id as mainCategoryId,
-               mc.code as mainCategoryCode,
                mc.nameTr as mainCategoryNameTr,
                mc.nameEn as mainCategoryNameEn,
                mc.technical as technical,
@@ -117,7 +165,7 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
         WHERE e.entryType = :entryType
         AND e.entryDate BETWEEN :start AND :end
         AND e.status IN :statuses
-        GROUP BY mc.id, mc.code, mc.nameTr, mc.nameEn, mc.technical
+        GROUP BY mc.id, mc.nameTr, mc.nameEn, mc.technical
         ORDER BY SUM(e.baseAmount.amount) DESC
     """)
     List<MainCategoryTotalProjection> findMainCategoryTotals(
@@ -134,16 +182,13 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
     @Query("""
         SELECT new com.marine.management.modules.finance.domain.model.TreeReportProjection(
             mc.id,
-            mc.code,
             mc.nameTr,
             mc.nameEn,
             mc.technical,
             c.id,
-            c.code,
             c.name,
             c.technical,
             w.id,
-            w.code,
             w.nameTr,
             w.nameEn,
             w.technical,
@@ -158,10 +203,10 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
         WHERE e.entryType = :entryType
         AND e.entryDate BETWEEN :startDate AND :endDate
         AND e.status IN :statuses
-        GROUP BY mc.id, mc.code, mc.nameTr, mc.nameEn, mc.technical,
-                 c.id, c.code, c.name, c.technical,
-                 w.id, w.code, w.nameTr, w.nameEn, w.technical
-        ORDER BY mc.code NULLS LAST, c.code, w.code NULLS LAST
+        GROUP BY mc.id, mc.nameTr, mc.nameEn, mc.technical,
+                 c.id, c.name, c.technical,
+                 w.id, w.nameTr, w.nameEn, w.technical
+        ORDER BY mc.nameEn NULLS LAST, c.name, w.nameEn NULLS LAST
     """)
     List<TreeReportProjection> findTreeProjections(
             @Param("entryType") RecordType entryType,
@@ -177,16 +222,13 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
     @Query("""
         SELECT new com.marine.management.modules.finance.domain.model.PivotReportProjection(
             mc.id,
-            mc.code,
             mc.nameTr,
             mc.nameEn,
             mc.technical,
             c.id,
-            c.code,
             c.name,
             c.technical,
             w.id,
-            w.code,
             w.nameTr,
             w.nameEn,
             w.technical,
@@ -202,11 +244,11 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
         WHERE e.entryType = :entryType
         AND EXTRACT(YEAR FROM e.entryDate) = :year
         AND e.status IN :statuses
-        GROUP BY mc.id, mc.code, mc.nameTr, mc.nameEn, mc.technical,
-                 c.id, c.code, c.name, c.technical,
-                 w.id, w.code, w.nameTr, w.nameEn, w.technical,
+        GROUP BY mc.id, mc.nameTr, mc.nameEn, mc.technical,
+                 c.id, c.name, c.technical,
+                 w.id, w.nameTr, w.nameEn, w.technical,
                  EXTRACT(MONTH FROM e.entryDate)
-        ORDER BY mc.code NULLS LAST, c.code, w.code NULLS LAST, EXTRACT(MONTH FROM e.entryDate)
+        ORDER BY mc.nameEn NULLS LAST, c.name, w.nameEn NULLS LAST, EXTRACT(MONTH FROM e.entryDate)
     """)
     List<PivotReportProjection> findPivotProjections(
             @Param("entryType") RecordType entryType,
@@ -292,6 +334,27 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
             @Param("statuses") Set<EntryStatus> statuses
     );
 
+    /**
+     * Monthly income/expense filtered by crew member.
+     * When crewMemberId is null, returns data for all users.
+     */
+    @Query("""
+        SELECT EXTRACT(MONTH FROM e.entryDate) as month,
+               e.entryType as entryType,
+               SUM(e.baseAmount.amount) as total
+        FROM FinancialEntry e
+        WHERE EXTRACT(YEAR FROM e.entryDate) = :year
+        AND e.status IN :statuses
+        AND (:crewMemberId IS NULL OR e.createdById = :crewMemberId)
+        GROUP BY EXTRACT(MONTH FROM e.entryDate), e.entryType
+        ORDER BY month
+    """)
+    List<MonthlyIncomeExpenseProjection> findMonthlyIncomeExpenseForCrew(
+            @Param("year") int year,
+            @Param("statuses") Set<EntryStatus> statuses,
+            @Param("crewMemberId") UUID crewMemberId
+    );
+
     @Query("""
         SELECT mc.id as mainCategoryId,
                EXTRACT(MONTH FROM e.entryDate) as month,
@@ -348,6 +411,26 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
             @Param("statuses") Set<EntryStatus> statuses
     );
 
+    /**
+     * Sum by entry type and date range, filtered by crew member.
+     * When crewMemberId is null, returns total for all users.
+     */
+    @Query("""
+        SELECT COALESCE(SUM(e.baseAmount.amount), 0)
+        FROM FinancialEntry e
+        WHERE e.entryType = :entryType
+        AND e.entryDate BETWEEN :start AND :end
+        AND e.status IN :statuses
+        AND (:crewMemberId IS NULL OR e.createdById = :crewMemberId)
+    """)
+    BigDecimal sumByEntryTypeAndDateRangeForCrew(
+            @Param("entryType") RecordType entryType,
+            @Param("start") LocalDate start,
+            @Param("end") LocalDate end,
+            @Param("statuses") Set<EntryStatus> statuses,
+            @Param("crewMemberId") UUID crewMemberId
+    );
+
     // ============================================
     // PROJECTION INTERFACES (Dashboard için basit interface projections)
     // ============================================
@@ -365,7 +448,6 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
 
     interface CategoryTotalProjection {
         UUID getCategoryId();
-        String getCategoryCode();
         String getCategoryName();
         Boolean getTechnical();
         BigDecimal getTotal();
@@ -374,7 +456,6 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
 
     interface WhoTotalProjection {
         Long getWhoId();
-        String getWhoCode();
         String getWhoNameTr();
         String getWhoNameEn();
         Boolean getTechnical();
@@ -384,7 +465,6 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
 
     interface MainCategoryTotalProjection {
         Long getMainCategoryId();
-        String getMainCategoryCode();
         String getMainCategoryNameTr();
         String getMainCategoryNameEn();
         Boolean getTechnical();

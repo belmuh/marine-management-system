@@ -19,9 +19,6 @@ public class MainCategory {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true, length = 50)
-    private String code;
-
     @Column(name = "name_tr", nullable = false, length = 100)
     private String nameTr;
 
@@ -46,7 +43,6 @@ public class MainCategory {
     protected MainCategory() {}
 
     public static MainCategory create(
-            String code,
             String nameTr,
             String nameEn,
             boolean technical,
@@ -55,7 +51,6 @@ public class MainCategory {
             String budgetMax
     ) {
         MainCategory category = new MainCategory();
-        category.code = Objects.requireNonNull(code, "Code cannot be null").toUpperCase();
         category.nameTr = Objects.requireNonNull(nameTr, "Turkish name cannot be null");
         category.nameEn = Objects.requireNonNull(nameEn, "English name cannot be null");
         category.technical = technical;
@@ -73,12 +68,6 @@ public class MainCategory {
     }
 
     private void validate() {
-        if (code == null || code.trim().isEmpty()) {
-            throw new IllegalArgumentException("Code cannot be empty");
-        }
-        if (code.length() > 50) {
-            throw new IllegalArgumentException("Code cannot exceed 50 characters");
-        }
         if (nameTr == null || nameTr.trim().isEmpty()) {
             throw new IllegalArgumentException("Turkish name cannot be empty");
         }
@@ -104,8 +93,6 @@ public class MainCategory {
     // === GETTERS & SETTERS ===
 
     public Long getId() { return id; }
-    public String getCode() { return code; }
-    public void setCode(String code) { this.code = code; }
     public String getNameTr() { return nameTr; }
     public void setNameTr(String nameTr) { this.nameTr = nameTr; }
     public String getNameEn() { return nameEn; }
@@ -134,6 +121,6 @@ public class MainCategory {
 
     @Override
     public String toString() {
-        return String.format("MainCategory{id=%d, code='%s', nameEn='%s'}", id, code, nameEn);
+        return String.format("MainCategory{id=%d, nameEn='%s'}", id, nameEn);
     }
 }

@@ -14,13 +14,12 @@ import java.util.UUID;
         name = "financial_categories",
         uniqueConstraints = {
                 @UniqueConstraint(
-                        name = "uq_financial_categories_tenant_code",
-                        columnNames = {"tenant_id", "code"}
+                        name = "uq_financial_categories_tenant_name",
+                        columnNames = {"tenant_id", "name"}
                 )
         },
         indexes = {
                 @Index(name = "idx_financial_categories_tenant_id", columnList = "tenant_id"),
-                @Index(name = "idx_financial_categories_tenant_code", columnList = "tenant_id, code"),
                 @Index(name = "idx_financial_categories_enabled", columnList = "is_enabled"),
                 @Index(name = "idx_financial_categories_type", columnList = "category_type")
         }
@@ -28,17 +27,12 @@ import java.util.UUID;
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class FinancialCategory extends BaseTenantEntity {
 
-    private static final String CODE_PATTERN = "^[A-Z0-9_]+$";
     private static final int MAX_NAME_LENGTH = 100;
-    private static final int MAX_CODE_LENGTH = 50;
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(columnDefinition = "UUID", updatable = false, nullable = false)
     private UUID id;
-
-    @Column(nullable = false, length = MAX_CODE_LENGTH, updatable = false)
-    private String code;
 
     @Column(nullable = false, length = MAX_NAME_LENGTH)
     private String name;
@@ -65,7 +59,6 @@ public class FinancialCategory extends BaseTenantEntity {
     protected FinancialCategory() {}
 
     public static FinancialCategory create(
-            String code,
             String name,
             RecordType categoryType,
             String description,
@@ -73,12 +66,11 @@ public class FinancialCategory extends BaseTenantEntity {
             boolean technical
     ) {
         FinancialCategory category = new FinancialCategory();
-        category.code = code.toUpperCase().trim();
         category.name = name.trim();
         category.categoryType = categoryType;
         category.description = description != null ? description.trim() : "";
         category.displayOrder = displayOrder;
-        category.technical = technical;  //  Consistent field name
+        category.technical = technical;
         category.createdAt = LocalDateTime.now();
 
         category.validate();
@@ -107,19 +99,6 @@ public class FinancialCategory extends BaseTenantEntity {
     }
 
     private void validate() {
-        if (code == null || code.trim().isEmpty()) {
-            throw new IllegalStateException("Category code cannot be empty");
-        }
-        if (code.length() > MAX_CODE_LENGTH) {
-            throw new IllegalStateException(
-                    String.format("Category code cannot exceed %d characters", MAX_CODE_LENGTH)
-            );
-        }
-        if (!code.matches(CODE_PATTERN)) {
-            throw new IllegalStateException(
-                    "Category code must contain only uppercase letters, numbers and underscores"
-            );
-        }
         if (name == null || name.trim().isEmpty()) {
             throw new IllegalStateException("Category name cannot be empty");
         }
@@ -137,10 +116,6 @@ public class FinancialCategory extends BaseTenantEntity {
 
     public UUID getId() {
         return id;
-    }
-
-    public String getCode() {
-        return code;
     }
 
     public String getName() {
@@ -194,8 +169,8 @@ public class FinancialCategory extends BaseTenantEntity {
     @Override
     public String toString() {
         return String.format(
-                "FinancialCategory{id=%s, tenantId=%s, code='%s', name='%s', enabled=%s}",
-                id, getTenantId(), code, name, enabled
+                "FinancialCategory{id=%s, tenantId=%s, name='%s', enabled=%s}",
+                id, getTenantId(), name, enabled
         );
     }
 }

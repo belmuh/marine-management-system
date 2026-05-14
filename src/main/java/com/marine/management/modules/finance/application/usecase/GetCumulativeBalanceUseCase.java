@@ -1,5 +1,6 @@
 package com.marine.management.modules.finance.application.usecase;
 
+import com.marine.management.modules.finance.application.TenantBaseCurrencyProvider;
 import com.marine.management.modules.finance.application.dto.CumulativeBalanceDTO;
 import com.marine.management.modules.finance.application.mapper.DashboardMapper;
 import com.marine.management.modules.finance.application.mapper.MonthlyBalanceMapper;
@@ -37,23 +38,25 @@ import java.util.Objects;
 public class GetCumulativeBalanceUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(GetCumulativeBalanceUseCase.class);
-    private static final String DEFAULT_CURRENCY = "EUR";
 
     private final FinancialEntryReportRepository reportRepository;
     private final MonthlyBalanceMapper monthlyBalanceMapper;
     private final CumulativeBalanceCalculator cumulativeBalanceCalculator;
     private final DashboardMapper dashboardMapper;
+    private final TenantBaseCurrencyProvider tenantBaseCurrencyProvider;
 
     public GetCumulativeBalanceUseCase(
             FinancialEntryReportRepository reportRepository,
             MonthlyBalanceMapper monthlyBalanceMapper,
             CumulativeBalanceCalculator cumulativeBalanceCalculator,
-            DashboardMapper dashboardMapper
+            DashboardMapper dashboardMapper,
+            TenantBaseCurrencyProvider tenantBaseCurrencyProvider
     ) {
         this.reportRepository = Objects.requireNonNull(reportRepository);
         this.monthlyBalanceMapper = Objects.requireNonNull(monthlyBalanceMapper);
         this.cumulativeBalanceCalculator = Objects.requireNonNull(cumulativeBalanceCalculator);
         this.dashboardMapper = Objects.requireNonNull(dashboardMapper);
+        this.tenantBaseCurrencyProvider = Objects.requireNonNull(tenantBaseCurrencyProvider);
     }
 
     /**
@@ -78,8 +81,9 @@ public class GetCumulativeBalanceUseCase {
         }
 
         // Map to domain objects
+        String baseCurrency = tenantBaseCurrencyProvider.getCurrentTenantBaseCurrency();
         List<MonthlyBalance> monthlyBalances =
-                monthlyBalanceMapper.toDomain(projections);
+                monthlyBalanceMapper.toDomain(projections, baseCurrency);
 
         // Calculate cumulative balance
         List<CumulativeBalance> cumulativeBalances =
@@ -117,15 +121,16 @@ public class GetCumulativeBalanceUseCase {
                 reportRepository.findMonthlyTotals(period.startDate(), period.endDate(), EntryStatus.ACTUAL_STATUSES);
 
         // Map to domain objects
+        String baseCurrency = tenantBaseCurrencyProvider.getCurrentTenantBaseCurrency();
         List<MonthlyBalance> monthlyBalances =
-                monthlyBalanceMapper.toDomain(projections);
+                monthlyBalanceMapper.toDomain(projections, baseCurrency);
 
         // Fill missing months
         YearMonth startMonth = YearMonth.from(period.startDate());
         YearMonth endMonth = YearMonth.from(period.endDate());
         List<MonthlyBalance> completeMonthlyBalances =
                 monthlyBalanceMapper.fillMissingMonths(
-                        monthlyBalances, startMonth, endMonth, DEFAULT_CURRENCY);
+                        monthlyBalances, startMonth, endMonth, baseCurrency);
 
         // Calculate cumulative balance
         List<CumulativeBalance> cumulativeBalances =

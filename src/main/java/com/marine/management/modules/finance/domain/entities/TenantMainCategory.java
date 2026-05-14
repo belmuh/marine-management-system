@@ -128,9 +128,9 @@ public class TenantMainCategory extends BaseTenantEntity {
     @Override
     public String toString() {
         return String.format(
-                "TenantMainCategory{id=%s, tenantId=%s, categoryCode='%s', budget=%s%%}",
+                "TenantMainCategory{id=%s, tenantId=%s, categoryName='%s', budget=%s%%}",
                 id, getTenantId(),
-                mainCategory != null ? mainCategory.getCode() : "null",
+                mainCategory != null ? mainCategory.getNameEn() : "null",
                 budgetPercentage
         );
     }

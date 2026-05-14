@@ -8,7 +8,6 @@ import java.util.UUID;
 
 public record CategoryWithUsageDto(
         UUID id,
-        String code,
         String name,
         String description,
         RecordType categoryType,
@@ -20,11 +19,10 @@ public record CategoryWithUsageDto(
         FinancialCategory category = cwu.getCategory();
         return new CategoryWithUsageDto(
                 category.getId(),
-                category.getCode(),
                 category.getName(),
                 category.getDescription(),
                 category.getCategoryType(),
-                category.isActive(),
+                category.isEnabled(),
                 category.getDisplayOrder(),
                 cwu.getUsageCount()
         );

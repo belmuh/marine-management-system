@@ -49,6 +49,7 @@ public class FinancialEntryService {
     private final FinancialEntryFactory entryFactory;
     private final ExchangeRateService exchangeRateService;
     private final EntryAccessPolicy accessPolicy;
+    private final TenantBaseCurrencyProvider tenantBaseCurrencyProvider;
 
     public FinancialEntryService(
             FinancialEntryRepository entryRepository,
@@ -57,7 +58,8 @@ public class FinancialEntryService {
             TenantMainCategoryRepository tenantMainCategoryRepository,
             FinancialEntryFactory entryFactory,
             ExchangeRateService exchangeRateService,
-            EntryAccessPolicy accessPolicy
+            EntryAccessPolicy accessPolicy,
+            TenantBaseCurrencyProvider tenantBaseCurrencyProvider
     ) {
         this.entryRepository = entryRepository;
         this.categoryRepository = categoryRepository;
@@ -66,6 +68,7 @@ public class FinancialEntryService {
         this.entryFactory = entryFactory;
         this.exchangeRateService = exchangeRateService;
         this.accessPolicy = accessPolicy;
+        this.tenantBaseCurrencyProvider = tenantBaseCurrencyProvider;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -78,7 +81,7 @@ public class FinancialEntryService {
         verifyUserBelongsToCurrentTenant(command.creator());
 
         FinancialEntry entry = entryFactory.createEntry(command);
-        entry.calculateBaseAmount(exchangeRateService);
+        entry.calculateBaseAmount(exchangeRateService, tenantBaseCurrencyProvider.getCurrentTenantBaseCurrency());
         FinancialEntry saved = entryRepository.saveAndFlush(entry);
 
         logger.info("Entry created: id={}, number={}", saved.getId(), saved.getEntryNumber().getValue());
@@ -194,7 +197,7 @@ public class FinancialEntryService {
             entry.updateReceiptNumber(command.receiptNumber());
         }
 
-        entry.calculateBaseAmount(exchangeRateService);
+        entry.calculateBaseAmount(exchangeRateService, tenantBaseCurrencyProvider.getCurrentTenantBaseCurrency());
 
         logger.debug("Entry updated: id={}", entry.getId());
 

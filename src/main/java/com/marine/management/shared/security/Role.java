@@ -6,9 +6,8 @@ import java.util.*;
  * User roles with hierarchical permission inheritance.
  *
  * Hierarchy:
- *   CREW → MANAGER → CAPTAIN → SUPER_ADMIN
- *
- * Each role inherits all permissions from its parent role.
+ *   MANAGER (standalone) → CAPTAIN (extends MANAGER) → SUPER_ADMIN
+ *   CREW (standalone, no hierarchy link)
  *
  * Approval Logic:
  * - PENDING_CAPTAIN: Only CAPTAIN can approve
@@ -16,9 +15,10 @@ import java.util.*;
  * - Captain is "super approver" - can approve at any level
  *
  * Roles explained:
- * - CREW: Basic vessel crew member (own entries only)
- * - MANAGER: Office manager (view all, approve manager-level, reports)
- * - CAPTAIN: Full tenant access, can approve at any level
+ * - CREW: Basic vessel crew member — creates entries, views/edits own
+ * - MANAGER: Approval-only role — sees and approves/rejects PENDING_MANAGER entries
+ *            Cannot create entries, cannot access reports/payments/incomes
+ * - CAPTAIN: Full tenant access — creates entries, approves at any level, manages everything
  * - ADMIN: Alias for CAPTAIN (backward compatibility)
  * - SUPER_ADMIN: Developer only, cross-tenant access
  */
@@ -38,47 +38,53 @@ public enum Role {
     )),
 
     /**
-     * MANAGER - Office manager
-     * View all entries, approve manager-level, view reports, manage payments
-     * Cannot approve captain-level, cannot edit others' entries
+     * MANAGER - Approval-only role
+     * Can ONLY view and approve/reject entries that reach PENDING_MANAGER status.
+     * Full (amount = requested) or partial (amount < requested) approval.
+     * Cannot create entries, cannot access reports, payments or incomes.
      */
-    MANAGER(CREW, Set.of(
-            Permission.ENTRY_VIEW_ALL,
-            Permission.ENTRY_APPROVE_MANAGER,  // Only manager-level approval
-            Permission.ENTRY_REJECT,
-
-            Permission.INCOME_VIEW,
-
-            Permission.PAYMENT_VIEW,
-            Permission.PAYMENT_CREATE,
-
-            Permission.REPORT_VIEW,
-            Permission.REPORT_EXPORT
+    MANAGER(null, Set.of(
+            Permission.ENTRY_VIEW_ALL,         // Must see entries to approve them
+            Permission.ENTRY_APPROVE_MANAGER,  // Approve PENDING_MANAGER entries (full or partial)
+            Permission.ENTRY_REJECT            // Reject PENDING_MANAGER entries
     )),
 
     /**
      * CAPTAIN - Full tenant access (= ADMIN)
-     * Can do everything including approve at any level
-     * Captain is the "patron" of the yacht
+     * Can do everything — create entries, approve at any level, manage all resources.
+     * Inherits MANAGER's approval permissions and adds full system access.
      */
     CAPTAIN(MANAGER, Set.of(
+            // Entry lifecycle (was in CREW — Captain must be able to create/submit)
+            Permission.ENTRY_CREATE,
+            Permission.ENTRY_SUBMIT,
             Permission.ENTRY_EDIT_ALL,
             Permission.ENTRY_DELETE_ALL,
+            Permission.ENTRY_VIEW_OWN,    // Redundant with VIEW_ALL (via MANAGER) but kept for clarity
             Permission.ENTRY_APPROVE_CAPTAIN,  // Captain-level approval
-            // ENTRY_APPROVE_MANAGER inherited from MANAGER
+            // ENTRY_APPROVE_MANAGER + ENTRY_REJECT inherited from MANAGER
 
+            // Income (Captain manages income)
+            Permission.INCOME_VIEW,
             Permission.INCOME_CREATE,
             Permission.INCOME_EDIT,
             Permission.INCOME_DELETE,
 
+            // Payments
+            Permission.PAYMENT_VIEW,
+            Permission.PAYMENT_CREATE,
             Permission.PAYMENT_EDIT,
             Permission.PAYMENT_DELETE,
 
+            // Reports
+            Permission.REPORT_VIEW,
+            Permission.REPORT_EXPORT,
+
+            // Users & Categories & Tenant
             Permission.USER_VIEW,
             Permission.USER_MANAGE,
-
+            Permission.CATEGORY_VIEW,
             Permission.CATEGORY_MANAGE,
-
             Permission.TENANT_MANAGE
     )),
 

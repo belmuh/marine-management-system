@@ -244,6 +244,25 @@ public interface FinancialEntryRepository
             @Param("endDate") LocalDate endDate
     );
 
+    /**
+     * Count by status and date range, optionally filtered by creator (crew member).
+     * When crewMemberId is null, returns counts for all users (manager/captain view).
+     * When crewMemberId is set, returns only that crew member's entries.
+     */
+    @Query("""
+        SELECT COUNT(e)
+        FROM FinancialEntry e
+        WHERE e.status IN :statuses
+        AND e.entryDate BETWEEN :startDate AND :endDate
+        AND (:crewMemberId IS NULL OR e.createdById = :crewMemberId)
+    """)
+    long countByStatusInAndEntryDateBetweenAndCrewMember(
+            @Param("statuses") Set<EntryStatus> statuses,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            @Param("crewMemberId") UUID crewMemberId
+    );
+
     // ============================================
     // PROJECTIONS (for lightweight queries)
     // ============================================

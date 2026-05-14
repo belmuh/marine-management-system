@@ -40,35 +40,35 @@ public class WhoDataLoader implements CommandLineRunner {
 
         logger.info("Loading ISS standard who list seed data...");
 
-        // Get main category IDs from shared data
-        Long crewExpensesId = DataLoaderSharedData.getMainCategoryId("CREW_EXPENSES");
-        Long maintenanceId = DataLoaderSharedData.getMainCategoryId("MAINTENANCE_REPAIRS");
-        Long dockageId = DataLoaderSharedData.getMainCategoryId("DOCKAGE_BERTHS");
-        Long provisionsId = DataLoaderSharedData.getMainCategoryId("PROVISIONS");
-        Long administrationId = DataLoaderSharedData.getMainCategoryId("ADMINISTRATION");
-        Long fuelId = DataLoaderSharedData.getMainCategoryId("FUEL");
+        // Get main category IDs from shared data (keyed by English name)
+        Long crewExpensesId = DataLoaderSharedData.getMainCategoryId("Crew Expenses");
+        Long maintenanceId = DataLoaderSharedData.getMainCategoryId("Maintenance & Repairs");
+        Long dockageId = DataLoaderSharedData.getMainCategoryId("Dockage & Berths");
+        Long provisionsId = DataLoaderSharedData.getMainCategoryId("Provisions");
+        Long administrationId = DataLoaderSharedData.getMainCategoryId("Administration");
+        Long fuelId = DataLoaderSharedData.getMainCategoryId("Fuel");
 
 
         List<Who> whoList = Arrays.asList(
                 // PERSONAL (6)
-                createWho("CAPTAIN", "Kaptan", "Captain", false, 1, crewExpensesId),
-                createWho("CREW", "Personel", "Crew", false, 2, crewExpensesId),
-                createWho("GUEST", "Misafir", "Guest", false, 3, provisionsId),
-                createWho("OWNER", "Tekne Sahibi", "Owner", false, 4, provisionsId),
-                createWho("OFFICE", "Ofis", "Office", false, 5, administrationId),
-                createWho("MARINA", "Marina", "Marina", false, 6, dockageId),
+                createWho("Kaptan", "Captain", false, 1, crewExpensesId),
+                createWho("Personel", "Crew", false, 2, crewExpensesId),
+                createWho("Misafir", "Guest", false, 3, provisionsId),
+                createWho("Tekne Sahibi", "Owner", false, 4, provisionsId),
+                createWho("Ofis", "Office", false, 5, administrationId),
+                createWho("Marina", "Marina", false, 6, dockageId),
 
                 // TECHNICAL (10) - For both Maintenance and Fuel
-                createWho("MAIN_ENGINE", "Ana Makine", "Main Engine", true, 7, maintenanceId),
-                createWho("GENERATOR", "Jeneratör", "Generator", true, 8,maintenanceId),
-                createWho("TENDER", "Tender", "Tender", true, 9, fuelId),
-                createWho("JETSKI", "Jetski", "Jetski", true, 10, fuelId),
-                createWho("AC_SYSTEM", "Klima", "AC System", true, 11, maintenanceId),
-                createWho("WATERMAKER", "Su Yapıcı", "Watermaker", true, 12, maintenanceId),
-                createWho("ELECTRICAL", "Elektrik", "Electrical", true, 13, maintenanceId),
-                createWho("PLUMBING", "Tesisat", "Plumbing", true, 14, maintenanceId),
-                createWho("ELECTRONICS", "Elektronik", "Electronics", true, 15, maintenanceId),
-                createWho("HULL", "Tekne Gövdesi", "Hull", true, 16, maintenanceId)
+                createWho("Ana Makine", "Main Engine", true, 7, maintenanceId),
+                createWho("Jeneratör", "Generator", true, 8, maintenanceId),
+                createWho("Tender", "Tender", true, 9, fuelId),
+                createWho("Jetski", "Jetski", true, 10, fuelId),
+                createWho("Klima", "AC System", true, 11, maintenanceId),
+                createWho("Su Yapıcı", "Watermaker", true, 12, maintenanceId),
+                createWho("Elektrik", "Electrical", true, 13, maintenanceId),
+                createWho("Tesisat", "Plumbing", true, 14, maintenanceId),
+                createWho("Elektronik", "Electronics", true, 15, maintenanceId),
+                createWho("Tekne Gövdesi", "Hull", true, 16, maintenanceId)
         );
 
         whoRepository.saveAll(whoList);
@@ -87,7 +87,6 @@ public class WhoDataLoader implements CommandLineRunner {
      *  FIXED: Uses Who.create() instead of new Who()
      */
     private Who createWho(
-            String code,
             String nameTr,
             String nameEn,
             boolean isTechnical,
@@ -95,7 +94,6 @@ public class WhoDataLoader implements CommandLineRunner {
             Long suggestedMainCategoryId
     ) {
         return Who.create(
-                code,
                 nameTr,
                 nameEn,
                 isTechnical,
