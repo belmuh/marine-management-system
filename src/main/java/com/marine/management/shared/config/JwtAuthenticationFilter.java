@@ -1,9 +1,11 @@
 // shared/config/JwtAuthenticationFilter.java
 package com.marine.management.shared.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marine.management.modules.auth.infrastructure.JwtUtil;
 import com.marine.management.modules.users.domain.User;
 import com.marine.management.modules.users.infrastructure.UserRepository;
+import com.marine.management.shared.presentation.ErrorResponse;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.security.SignatureException;
@@ -22,6 +24,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.UUID;
 
 /**
  * JWT authentication filter.
@@ -41,10 +44,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
     private final UserRepository userRepository;
+    private final ObjectMapper objectMapper;
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil, UserRepository userRepository) {
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, UserRepository userRepository,
+                                   ObjectMapper objectMapper) {
         this.jwtUtil = jwtUtil;
         this.userRepository = userRepository;
+        this.objectMapper = objectMapper;
         logger.debug("Filter 'jwtAuthenticationFilter' configured for use");
     }
 
@@ -100,30 +106,35 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
 
         } catch (ExpiredJwtException e) {
-            logger.warn("JWT token expired: {}", e.getMessage());
             sendErrorResponse(response, HttpServletResponse.SC_UNAUTHORIZED,
-                    "Token expired", e.getMessage());
+                    "Token expired", "TOKEN_EXPIRED", e);
         } catch (MalformedJwtException e) {
-            logger.warn("Malformed JWT token: {}", e.getMessage());
             sendErrorResponse(response, HttpServletResponse.SC_UNAUTHORIZED,
-                    "Invalid token format", e.getMessage());
+                    "Invalid token", "INVALID_TOKEN", e);
         } catch (SignatureException e) {
-            logger.warn("Invalid JWT signature: {}", e.getMessage());
             sendErrorResponse(response, HttpServletResponse.SC_UNAUTHORIZED,
-                    "Invalid token signature", e.getMessage());
+                    "Invalid token", "INVALID_TOKEN", e);
         } catch (Exception e) {
-            logger.error("JWT authentication error: {}", e.getMessage(), e);
             sendErrorResponse(response, HttpServletResponse.SC_FORBIDDEN,
-                    "Authentication failed", e.getMessage());
+                    "Authentication failed", "AUTHENTICATION_FAILED", e);
         }
     }
 
-    private void sendErrorResponse(HttpServletResponse response, int status, String error, String message)
+    /**
+     * Generic hata yanıtı: iç exception detayı response'a YAZILMAZ, sadece
+     * errorId korelasyonuyla loglanır (prod'daki server.error.include-message=never
+     * ve GlobalExceptionHandler felsefesiyle tutarlı). Elle String.format ile
+     * JSON üretimi de kaldırıldı — mesajda tırnak varsa bozuk JSON üretiyordu.
+     */
+    private void sendErrorResponse(HttpServletResponse response, int status,
+                                   String error, String code, Exception cause)
             throws IOException {
+        String errorId = UUID.randomUUID().toString();
+        logger.warn("JWT auth failure [ID: {}] code={}: {}", errorId, code, cause.getMessage());
+
         response.setStatus(status);
         response.setContentType("application/json");
-        response.getWriter().write(
-                String.format("{\"error\":\"%s\",\"message\":\"%s\"}", error, message)
-        );
+        objectMapper.writeValue(response.getWriter(),
+                new ErrorResponse(error, code, errorId));
     }
 }

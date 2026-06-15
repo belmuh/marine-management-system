@@ -1,10 +1,12 @@
 package com.marine.management.shared.config;
 
 import com.marine.management.shared.multitenant.TenantFilter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -37,10 +39,21 @@ import java.util.List;
  */
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity // @PreAuthorize kontrollerini aktive eder (controller'lardaki izin anotasyonları)
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtFilter;
     private final TenantFilter tenantFilter;
+
+    /**
+     * Virgülle ayrılmış izinli origin listesi.
+     * Dev:  application-dev.properties → localhost:4200 varyantları
+     * Prod: CORS_ALLOWED_ORIGINS env (ör. "https://maritar.com,https://www.maritar.com")
+     * Env tanımsızsa uygulama başlangıçta hata verir — sessiz yanlış config yerine
+     * erken ve gürültülü hata tercih edildi.
+     */
+    @Value("${cors.allowed-origins}")
+    private String allowedOrigins;
 
     public SecurityConfig(
             JwtAuthenticationFilter jwtFilter,
@@ -65,18 +78,11 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
 
-                        // Protected endpoints (authority-based)
-                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
-
-                        .requestMatchers("/api/users/**")
-                        .hasAnyRole("SUPER_ADMIN", "ADMIN", "MANAGER", "CAPTAIN")
-
-                        .requestMatchers("/api/finance/**")
-                        .hasAnyRole("SUPER_ADMIN", "ADMIN", "MANAGER", "CAPTAIN", "CREW")
-
-                        .requestMatchers("/api/reports/**")
-                        .hasAnyRole("SUPER_ADMIN", "ADMIN", "MANAGER", "CAPTAIN")
-
+                        // Yetkilendirme metot seviyesinde permission tabanlı yapılır:
+                        // @PreAuthorize("hasAuthority('...')") — bkz. Role/Permission.
+                        // URL seviyesinde rol listesi tutulmaz (eski hasAnyRole kuralları
+                        // CREW'un kendi profiline erişimini engelliyordu ve /api/admin,
+                        // /api/reports gibi ölü path'ler içeriyordu).
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
@@ -109,12 +115,14 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // Allow Angular origin
-        configuration.setAllowedOrigins(List.of(
-                "http://localhost:4200",
-                "https://localhost:4200",
-                "http://127.0.0.1:4200"
-        ));
+        // Origin'ler property'den gelir — prod'da CORS_ALLOWED_ORIGINS env zorunlu.
+        // Önceki hardcoded localhost listesi prod'da tüm istekleri reddediyordu.
+        configuration.setAllowedOrigins(
+                Arrays.stream(allowedOrigins.split(","))
+                        .map(String::trim)
+                        .filter(s -> !s.isEmpty())
+                        .toList()
+        );
 
         // Allow all HTTP methods
         configuration.setAllowedMethods(Arrays.asList(
