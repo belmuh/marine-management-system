@@ -28,6 +28,10 @@
 	</scm>
 	<properties>
 		<java.version>21</java.version>
+		<!-- Spring Boot 3.5.7 BOM'u Testcontainers 1.21.3 getiriyor; Docker Engine 29
+		     (OrbStack) min API 1.40+ istediği için 1.21.4'e yükseltildi.
+		     https://github.com/testcontainers/testcontainers-java/issues/11212 -->
+		<testcontainers.version>1.21.4</testcontainers.version>
 	</properties>
 	<dependencies>
 		<!-- Existing dependencies -->
@@ -68,13 +72,6 @@
 		<dependency>
 			<groupId>org.flywaydb</groupId>
 			<artifactId>flyway-database-postgresql</artifactId>
-		</dependency>
-
-		<!-- H2 Database - Test Only -->
-		<dependency>
-			<groupId>com.h2database</groupId>
-			<artifactId>h2</artifactId>
-			<scope>test</scope>
 		</dependency>
 
 		<dependency>
@@ -164,6 +161,25 @@
 		<dependency>
 			<groupId>org.assertj</groupId>
 			<artifactId>assertj-core</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+		<!-- Testcontainers: entegrasyon testleri gerçek PostgreSQL'e karşı koşar
+		     (H2 kaldırıldı — RLS ve PG-spesifik davranış H2'de test edilemez).
+		     Versiyonlar Spring Boot BOM'dan gelir. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-testcontainers</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>junit-jupiter</artifactId>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>

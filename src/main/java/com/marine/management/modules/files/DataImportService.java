@@ -1,25 +1,66 @@
 package com.marine.management.modules.files;
 
+import com.marine.management.modules.finance.application.TenantBaseCurrencyProvider;
+import com.marine.management.modules.finance.domain.entities.FinancialCategory;
+import com.marine.management.modules.finance.domain.entities.FinancialEntry;
+import com.marine.management.modules.finance.domain.entities.Payment;
+import com.marine.management.modules.finance.domain.enums.PaymentMethod;
+import com.marine.management.modules.finance.domain.enums.RecordType;
+import com.marine.management.modules.finance.domain.vo.EntryNumber;
+import com.marine.management.modules.finance.domain.vo.Money;
+import com.marine.management.modules.finance.infrastructure.FinancialCategoryRepository;
+import com.marine.management.modules.finance.infrastructure.FinancialEntryRepository;
+import com.marine.management.modules.users.domain.User;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * Imports historical financial data from Excel files.
+ *
+ * BUSINESS RULES (import = completed historical records):
+ * - Imported entries are created as PAID: DRAFT → submitAndApprove() → addPayment(full amount).
+ *   Rationale: these are past, settled transactions; leaving them DRAFT would hide them
+ *   from financial reports (only ACTUAL statuses are reported) and leaving them APPROVED
+ *   would show them as outstanding/unpaid.
+ * - Unknown categories are auto-created (type determined by majority usage in the file).
+ * - Currency: as provided by the parser (currently EUR-only).
+ *
+ * TENANT ISOLATION: repositories are auto tenant-filtered; TenantEntityListener
+ * injects tenant_id on save. Entry numbers come from the DB sequence per row
+ * (NEXTVAL is atomic — see W1 fix notes below in processEntries).
+ */
 @Service
 @Transactional
 public class DataImportService {
-/*
+
+    private static final Logger log = LoggerFactory.getLogger(DataImportService.class);
+
     private final ExcelParserService excelParserService;
     private final FinancialCategoryRepository categoryRepository;
     private final FinancialEntryRepository entryRepository;
+    private final TenantBaseCurrencyProvider tenantBaseCurrencyProvider;
     private final CategoryTypeDeterminer categoryTypeDeterminer;
 
     public DataImportService(
             ExcelParserService excelParserService,
             FinancialCategoryRepository categoryRepository,
-            FinancialEntryRepository entryRepository
+            FinancialEntryRepository entryRepository,
+            TenantBaseCurrencyProvider tenantBaseCurrencyProvider
     ) {
         this.excelParserService = excelParserService;
         this.categoryRepository = categoryRepository;
         this.entryRepository = entryRepository;
+        this.tenantBaseCurrencyProvider = tenantBaseCurrencyProvider;
         this.categoryTypeDeterminer = new CategoryTypeDeterminer();
     }
 
@@ -35,7 +76,11 @@ public class DataImportService {
         // 3. Process entries
         processEntries(excelRows, categoryMap, currentUser, resultBuilder);
 
-        return resultBuilder.build();
+        ImportResultDto result = resultBuilder.build();
+        log.info("Excel import completed by user {}: {} total rows, {} successful, {} failed, {} categories created",
+                currentUser.getId(), result.totalRows(), result.successfulRows(),
+                result.failedRows(), result.categoriesCreated());
+        return result;
     }
 
     // ============================================
@@ -68,12 +113,7 @@ public class DataImportService {
 
         // Create or find categories
         CategoryProcessor categoryProcessor = new CategoryProcessor(categoryRepository);
-        Map<String, FinancialCategory> categoryMap = categoryProcessor.processCategories(
-                categoryTypeMap,
-                resultBuilder
-        );
-
-        return categoryMap;
+        return categoryProcessor.processCategories(categoryTypeMap, resultBuilder);
     }
 
     // ============================================
@@ -86,8 +126,13 @@ public class DataImportService {
             User currentUser,
             ImportResultDto.Builder resultBuilder
     ) {
-        int currentSequence = entryRepository.getNextSequence();
-        EntryCreator entryCreator = new EntryCreator(categoryMap, currentUser, currentSequence);
+        // Her satır için DB sequence'tan taze değer alınır (NEXTVAL atomiktir).
+        // Önceki yaklaşım tek NEXTVAL çekip numarayı bellekte ++ ile artırıyordu:
+        // DB sequence yalnızca 1 ilerlediği için import sonrası manuel kayıtlar
+        // aynı numaraları alıyordu (duplicate çakışması).
+        String baseCurrency = tenantBaseCurrencyProvider.getCurrentTenantBaseCurrency();
+        EntryCreator entryCreator = new EntryCreator(
+                categoryMap, currentUser, entryRepository::getNextSequence, baseCurrency);
 
         int successCount = 0;
 
@@ -102,6 +147,7 @@ public class DataImportService {
             } catch (ImportException e) {
                 resultBuilder.addError(rowNumber, "entry", e.getMessage());
             } catch (Exception e) {
+                log.warn("Unexpected error importing row {}", rowNumber, e);
                 resultBuilder.addError(rowNumber, "system",
                         "Unexpected error: " + e.getMessage());
             }
@@ -114,7 +160,6 @@ public class DataImportService {
     // ============================================
     // INNER CLASSES (Single Responsibility)
     // ============================================
-
 
     private static class CategoryTypeDeterminer {
 
@@ -161,7 +206,7 @@ public class DataImportService {
         }
     }
 
-    //Helper class to count category usage
+    // Helper class to count category usage
 
     private static class CategoryUsageCounter {
         private final Map<String, Integer> incomeCount = new HashMap<>();
@@ -191,11 +236,12 @@ public class DataImportService {
         }
     }
 
-    //Creates or finds FinancialCategory entities
+    // Creates or finds FinancialCategory entities
 
     private static class CategoryProcessor {
 
         private final FinancialCategoryRepository categoryRepository;
+        private int createdCount = 0;
 
         public CategoryProcessor(FinancialCategoryRepository categoryRepository) {
             this.categoryRepository = categoryRepository;
@@ -206,7 +252,6 @@ public class DataImportService {
                 ImportResultDto.Builder resultBuilder
         ) {
             Map<String, FinancialCategory> categoryMap = new HashMap<>();
-            int createdCount = 0;
 
             for (Map.Entry<String, RecordType> entry : categoryTypeMap.entrySet()) {
                 String categoryName = entry.getKey();
@@ -230,7 +275,7 @@ public class DataImportService {
         ) {
             return categoryRepository.findByName(categoryName.trim())
                     .map(existingCategory -> validateExistingCategory(
-                            existingCategory, categoryName, categoryType, resultBuilder
+                            existingCategory, categoryName, categoryType
                     ))
                     .orElseGet(() -> createNewCategory(
                             categoryName, categoryType
@@ -240,16 +285,11 @@ public class DataImportService {
         private FinancialCategory validateExistingCategory(
                 FinancialCategory existingCategory,
                 String categoryName,
-                RecordType suggestedType,
-                ImportResultDto.Builder resultBuilder
+                RecordType suggestedType
         ) {
             if (existingCategory.getCategoryType() != suggestedType) {
-                logCategoryTypeMismatch(
-                        categoryName,
-                        existingCategory.getCategoryType(),
-                        suggestedType,
-                        resultBuilder
-                );
+                log.info("Category '{}' has type {} but Excel data suggests {}",
+                        categoryName, existingCategory.getCategoryType(), suggestedType);
             }
             return existingCategory;
         }
@@ -269,8 +309,9 @@ public class DataImportService {
                         isTechnical
                 );
 
-
-                return categoryRepository.save(newCategory);
+                FinancialCategory saved = categoryRepository.save(newCategory);
+                createdCount++;
+                return saved;
 
             } catch (Exception e) {
                 throw new CategoryCreationException(
@@ -291,39 +332,27 @@ public class DataImportService {
         private int getNextDisplayOrder() {
             return (int) categoryRepository.count() + 1;
         }
-
-        private void logCategoryTypeMismatch(
-                String categoryName,
-                RecordType existingType,
-                RecordType suggestedType,
-                ImportResultDto.Builder resultBuilder
-        ) {
-            String message = String.format(
-                    "Category '%s' has type %s but Excel data suggests %s",
-                    categoryName, existingType, suggestedType
-            );
-            System.out.println(message);
-        }
     }
 
-    // Creates FinancialEntry entities
+    // Creates FinancialEntry entities as PAID historical records
 
     private static class EntryCreator {
 
         private final Map<String, FinancialCategory> categoryMap;
         private final User creator;
-        private final int startingSequence;
-        private int currentSequence;
+        private final java.util.function.IntSupplier sequenceSupplier;
+        private final String baseCurrency;
 
         public EntryCreator(
                 Map<String, FinancialCategory> categoryMap,
                 User creator,
-                int startingSequence
+                java.util.function.IntSupplier sequenceSupplier,
+                String baseCurrency
         ) {
             this.categoryMap = categoryMap;
             this.creator = creator;
-            this.startingSequence = startingSequence;
-            this.currentSequence = startingSequence;
+            this.sequenceSupplier = sequenceSupplier;
+            this.baseCurrency = baseCurrency;
         }
 
         public FinancialEntry createEntry(ExcelRow row) {
@@ -333,7 +362,9 @@ public class DataImportService {
             Money amount = createMoney(row);
             EntryNumber entryNumber = generateEntryNumber();
 
-            return createFinancialEntry(row, category, amount, entryNumber);
+            FinancialEntry entry = createFinancialEntry(row, category, amount, entryNumber);
+            markAsPaidHistoricalRecord(entry, row);
+            return entry;
         }
 
         private FinancialCategory getCategoryForRow(ExcelRow row) {
@@ -356,11 +387,11 @@ public class DataImportService {
         }
 
         private Money createMoney(ExcelRow row) {
-            return Money.of(row.amount().toString(), row.currency());
+            return Money.of(row.amount(), row.currency());
         }
 
         private EntryNumber generateEntryNumber() {
-            return EntryNumber.generate(currentSequence++);
+            return EntryNumber.generate(sequenceSupplier.getAsInt());
         }
 
         private FinancialEntry createFinancialEntry(
@@ -371,46 +402,47 @@ public class DataImportService {
         ) {
             RecordType entryType = row.isIncome() ? RecordType.INCOME : RecordType.EXPENSE;
 
-            // Use appropriate factory method based on entry type
+            return FinancialEntry.create(
+                    entryNumber,
+                    entryType,
+                    category,
+                    amount,
+                    row.date(),
+                    determinePaymentMethod(row),
+                    row.description(),
+                    null,           // tenantWho — not available in Excel data
+                    null,           // tenantMainCategory — not available in Excel data
+                    null,           // recipient
+                    null,           // country
+                    null,           // city
+                    null,           // specificLocation
+                    null,           // vendor
+                    baseCurrency
+            );
+        }
 
-                return FinancialEntry.create(
-                        entryNumber,
-                        entryType,
-                        category,
-                        amount,
-                        row.date(),
-                        determinePaymentMethod(row),
-                        row.description(),
-                        creator,
-                        null,
-                        null,
-                        null,
-                        "Türkiye",
-                        null,
-                        null,
-                        determineIncomeSource(row)
-                );
+        /**
+         * Historical records are completed transactions:
+         * DRAFT → APPROVED (submitAndApprove) → PAID (full payment dated at entry date).
+         */
+        private void markAsPaidHistoricalRecord(FinancialEntry entry, ExcelRow row) {
+            entry.submitAndApprove();
 
+            Payment payment = Payment.create(
+                    entry,
+                    entry.getBaseAmount(),
+                    row.date(),
+                    null,
+                    determinePaymentMethod(row),
+                    "Imported from Excel",
+                    creator
+            );
+            entry.addPayment(payment);
         }
 
         private PaymentMethod determinePaymentMethod(ExcelRow row) {
             // Default for Excel imports
             return PaymentMethod.CASH;
-        }
-
-        private String determineIncomeSource(ExcelRow row) {
-            // Extract source from description or use default
-            return row.description().contains("Charter") ? "Charter" : "Other";
-        }
-
-        private String determineRecipient(ExcelRow row) {
-            // Extract recipient logic based on category or description
-            return row.category().toLowerCase().contains("salary") ? "Crew" : "Main Yacht";
-        }
-
-        private String determineVendor(ExcelRow row) {
-            // Extract vendor from description or use category
-            return row.description().split(" ")[0]; // Simple extraction
         }
     }
 
@@ -434,5 +466,5 @@ public class DataImportService {
         public CategoryCreationException(String message, Throwable cause) {
             super(message, cause);
         }
-    }*/
+    }
 }
