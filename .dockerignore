@@ -1,0 +1,18 @@
+# Build bağlamına girmemesi gerekenler — imaj küçük kalır, sır sızmaz
+target/
+.git/
+.github/
+.idea/
+.mvn/wrapper/maven-wrapper.jar
+
+# Sırlar — asla imaja girmemeli
+.env
+.env.*
+passwords.txt
+
+# Yerel veri ve dokümanlar
+uploads/
+dev-uploads/
+*.md
+docs/
+.DS_Store

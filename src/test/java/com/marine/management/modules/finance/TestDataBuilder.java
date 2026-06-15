@@ -236,7 +236,8 @@ public class TestDataBuilder {
                 "Turkey",
                 "Istanbul",
                 "Test Location",
-                "Test Vendor"
+                "Test Vendor",
+                amount.getCurrencyCode()
         );
 
         // Set IDs
@@ -426,7 +427,8 @@ public class TestDataBuilder {
                     "Turkey",
                     "Istanbul",
                     null,
-                    null
+                    null,
+                    amount.getCurrencyCode()
             );
 
             // Set IDs
