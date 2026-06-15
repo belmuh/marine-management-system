@@ -237,9 +237,11 @@ public class PaymentService {
 
         BigDecimal totalPaidAmount = paymentRepository.sumPaymentsByEntryId(entryId);
 
+        // Kaydın kendi base para birimi kullanılır — eski FinancialEntry.BASE_CURRENCY
+        // sabiti tenant bazlı para birimine geçişte kaldırılmıştı.
         Money totalPaid = Money.of(
                 totalPaidAmount != null ? totalPaidAmount.toPlainString() : "0",
-                FinancialEntry.BASE_CURRENCY
+                entry.getBaseAmount().getCurrencyCode()
         );
 
         long paymentCount = paymentRepository.countByEntry_Id(entryId);

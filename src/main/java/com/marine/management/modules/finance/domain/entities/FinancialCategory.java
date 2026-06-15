@@ -37,6 +37,11 @@ public class FinancialCategory extends BaseTenantEntity {
     @Column(nullable = false, length = MAX_NAME_LENGTH)
     private String name;
 
+    // English label. Nullable: starter categories are seeded bilingually, but
+    // user-created categories may have only the native name (UI falls back to name).
+    @Column(name = "name_en", length = MAX_NAME_LENGTH)
+    private String nameEn;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "category_type", nullable = false, length = 20)
     private RecordType categoryType;
@@ -65,8 +70,20 @@ public class FinancialCategory extends BaseTenantEntity {
             Integer displayOrder,
             boolean technical
     ) {
+        return create(name, null, categoryType, description, displayOrder, technical);
+    }
+
+    public static FinancialCategory create(
+            String name,
+            String nameEn,
+            RecordType categoryType,
+            String description,
+            Integer displayOrder,
+            boolean technical
+    ) {
         FinancialCategory category = new FinancialCategory();
         category.name = name.trim();
+        category.nameEn = (nameEn != null && !nameEn.isBlank()) ? nameEn.trim() : null;
         category.categoryType = categoryType;
         category.description = description != null ? description.trim() : "";
         category.displayOrder = displayOrder;
@@ -120,6 +137,10 @@ public class FinancialCategory extends BaseTenantEntity {
 
     public String getName() {
         return name;
+    }
+
+    public String getNameEn() {
+        return nameEn;
     }
 
     public RecordType getCategoryType() {

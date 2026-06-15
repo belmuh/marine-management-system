@@ -187,6 +187,7 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
             mc.technical,
             c.id,
             c.name,
+            c.nameEn,
             c.technical,
             w.id,
             w.nameTr,
@@ -204,7 +205,7 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
         AND e.entryDate BETWEEN :startDate AND :endDate
         AND e.status IN :statuses
         GROUP BY mc.id, mc.nameTr, mc.nameEn, mc.technical,
-                 c.id, c.name, c.technical,
+                 c.id, c.name, c.nameEn, c.technical,
                  w.id, w.nameTr, w.nameEn, w.technical
         ORDER BY mc.nameEn NULLS LAST, c.name, w.nameEn NULLS LAST
     """)
@@ -227,6 +228,7 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
             mc.technical,
             c.id,
             c.name,
+            c.nameEn,
             c.technical,
             w.id,
             w.nameTr,
@@ -245,7 +247,7 @@ public interface FinancialEntryReportRepository extends JpaRepository<FinancialE
         AND EXTRACT(YEAR FROM e.entryDate) = :year
         AND e.status IN :statuses
         GROUP BY mc.id, mc.nameTr, mc.nameEn, mc.technical,
-                 c.id, c.name, c.technical,
+                 c.id, c.name, c.nameEn, c.technical,
                  w.id, w.nameTr, w.nameEn, w.technical,
                  EXTRACT(MONTH FROM e.entryDate)
         ORDER BY mc.nameEn NULLS LAST, c.name, w.nameEn NULLS LAST, EXTRACT(MONTH FROM e.entryDate)

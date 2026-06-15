@@ -111,7 +111,8 @@ public class OrganizationOnboardingService {
 
             tenantReferenceDataInitializer.initializeTenantReferenceData(
                     command.selectedMainCategoryIds(),
-                    command.selectedWhoIds()
+                    command.selectedWhoIds(),
+                    command.flagCountry()
             );
 
             logger.info("Onboarding completed for yacht: {} (tenant: {})",

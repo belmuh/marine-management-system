@@ -2,7 +2,9 @@ package com.marine.management.modules.finance.domain.entities;
 
 import com.marine.management.modules.finance.domain.enums.AttachmentType;
 import com.marine.management.modules.users.domain.User;
+import com.marine.management.shared.multitenant.TenantContext;
 import jakarta.persistence.*;
+import org.hibernate.annotations.Filter;
 import org.hibernate.envers.NotAudited;
 
 import java.time.LocalDateTime;
@@ -13,15 +15,11 @@ import java.util.UUID;
  * Financial entry attachment entity.
  *
  * TENANT ISOLATION:
- * - Does NOT extend BaseTenantEntity
- * - Tenant isolation through parent FinancialEntry
- * - Cascade operations inherit tenant context
- *
- * WHY NO BaseTenantEntity?
- * - Attachment is child aggregate of FinancialEntry
- * - Always accessed through parent entry
- * - Never queried independently
- * - Tenant isolation via parent's tenant_id
+ * - Does NOT extend BaseTenantEntity (audit/soft-delete kolonları gereksiz)
+ * - Denormalize tenant_id taşır: parent entry'den associateWithEntry() sırasında miras alınır
+ * - @Filter ile tenant-scoped sorgulanır; RLS policy'si de bu kolonu kullanır
+ *   (bkz. docs/RLS_IMPLEMENTATION_PLAN.md §1-2)
+ * - @PrePersist guard: tenant_id'siz veya context'le uyumsuz persist'i reddeder
  *
  * @see FinancialEntry
  */
@@ -30,9 +28,11 @@ import java.util.UUID;
         name = "financial_entry_attachments",
         indexes = {
                 @Index(name = "idx_attachments_entry", columnList = "entry_id"),
-                @Index(name = "idx_attachments_uploaded_by", columnList = "uploaded_by")
+                @Index(name = "idx_attachments_uploaded_by", columnList = "uploaded_by"),
+                @Index(name = "idx_attachments_tenant", columnList = "tenant_id")
         }
 )
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class FinancialEntryAttachment {
 
     @Id
@@ -52,6 +52,13 @@ public class FinancialEntryAttachment {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "entry_id", nullable = false)
     private FinancialEntry entry;
+
+    /**
+     * Denormalized tenant_id — parent entry'den miras alınır.
+     * RLS policy ve Hibernate tenantFilter bu kolonu kullanır.
+     */
+    @Column(name = "tenant_id", nullable = false, updatable = false)
+    private Long tenantId;
 
     @Column(name = "file_name", nullable = false, length = 255)
     private String fileName;
@@ -125,6 +132,7 @@ public class FinancialEntryAttachment {
      */
     public void associateWithEntry(FinancialEntry entry) {
         this.entry = entry;
+        this.tenantId = entry.getTenantId();
     }
 
     /**
@@ -134,6 +142,31 @@ public class FinancialEntryAttachment {
      */
     public void dissociateFromEntry() {
         this.entry = null;
+    }
+
+    // === LIFECYCLE GUARDS ===
+
+    /**
+     * Fail-fast guard (TenantEntityListener ile aynı felsefe):
+     * tenant_id'siz persist = güvenlik ihlali, reddedilir.
+     */
+    @PrePersist
+    private void enforceTenantId() {
+        if (tenantId == null && entry != null) {
+            tenantId = entry.getTenantId();
+        }
+        if (tenantId == null) {
+            throw new IllegalStateException(
+                    "Cannot persist attachment without tenant_id. " +
+                            "This is a critical security violation - tenant isolation would be compromised.");
+        }
+        if (TenantContext.hasTenantContext()
+                && !tenantId.equals(TenantContext.getCurrentTenantId())) {
+            throw new IllegalStateException(
+                    "Tenant ID mismatch on attachment persist. " +
+                            "Current tenant: " + TenantContext.getCurrentTenantId() +
+                            ", Attachment tenant: " + tenantId);
+        }
     }
 
     // === DOMAIN CHECKS ===
@@ -207,6 +240,10 @@ public class FinancialEntryAttachment {
 
     public FinancialEntry getEntry() {
         return entry;
+    }
+
+    public Long getTenantId() {
+        return tenantId;
     }
 
     public String getFileName() {

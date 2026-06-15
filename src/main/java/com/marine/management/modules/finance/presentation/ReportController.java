@@ -15,6 +15,7 @@ import com.marine.management.modules.finance.presentation.dto.reports.PeriodBrea
 import com.marine.management.modules.finance.presentation.dto.reports.TreeReportRequest;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -23,6 +24,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/finance/reports")
+@PreAuthorize("hasAuthority('REPORT_VIEW')")  // sınıf seviyesi: tüm rapor endpoint'leri
 public class ReportController {
 
     private final GenerateAnnualReportUseCase generateAnnualReportUseCase;

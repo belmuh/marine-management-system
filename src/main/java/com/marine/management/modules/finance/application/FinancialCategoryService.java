@@ -3,6 +3,7 @@ package com.marine.management.modules.finance.application;
 import com.marine.management.modules.finance.domain.entities.FinancialCategory;
 import com.marine.management.modules.finance.domain.enums.RecordType;
 import com.marine.management.modules.finance.infrastructure.FinancialCategoryRepository;
+import com.marine.management.modules.finance.infrastructure.MainCategoryRepository;
 import com.marine.management.modules.users.domain.User;
 import com.marine.management.shared.exceptions.CategoryNotFoundException;
 import com.marine.management.shared.multitenant.TenantContext;
@@ -40,9 +41,14 @@ public class FinancialCategoryService {
     private static final Logger logger = LoggerFactory.getLogger(FinancialCategoryService.class);
 
     private final FinancialCategoryRepository categoryRepository;
+    private final MainCategoryRepository mainCategoryRepository;
 
-    public FinancialCategoryService(FinancialCategoryRepository categoryRepository) {
+    public FinancialCategoryService(
+            FinancialCategoryRepository categoryRepository,
+            MainCategoryRepository mainCategoryRepository
+    ) {
         this.categoryRepository = categoryRepository;
+        this.mainCategoryRepository = mainCategoryRepository;
     }
 
     // ============================================
@@ -75,6 +81,10 @@ public class FinancialCategoryService {
                     "Category name already exists in your organization: " + name
             );
         }
+
+        // A category may not reuse a main category's name (TR or EN) — that produces
+        // a confusing pivot/tree level that looks like the main category duplicated.
+        guardNotMainCategoryName(name);
 
         // Create category (tenant_id auto-injected)
         FinancialCategory category = FinancialCategory.create(
@@ -291,6 +301,24 @@ public class FinancialCategoryService {
      *
      * CRITICAL: Service methods should not run without tenant context.
      */
+    /**
+     * Rejects category names that collide with an existing main category name
+     * (Turkish or English, case-insensitive). Keeps the pivot/tree hierarchy
+     * unambiguous — a category should never look like a clone of its main category.
+     */
+    private void guardNotMainCategoryName(String name) {
+        String candidate = name.trim();
+        boolean clashes = mainCategoryRepository.findAll().stream()
+                .anyMatch(mc ->
+                        candidate.equalsIgnoreCase(mc.getNameTr())
+                                || candidate.equalsIgnoreCase(mc.getNameEn()));
+        if (clashes) {
+            throw new IllegalArgumentException(
+                    "Category name conflicts with a main category name: " + name
+            );
+        }
+    }
+
     private void guardTenantContext() {
         if (!TenantContext.hasTenantContext()) {
             logger.error("CRITICAL: Service method called without tenant context!");

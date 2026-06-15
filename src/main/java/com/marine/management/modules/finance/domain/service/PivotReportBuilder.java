@@ -38,7 +38,7 @@ public class PivotReportBuilder {
     }
 
     private Map<String, BigDecimal> calculateColumnTotals(List<PivotReportProjection> projections, int year) {
-        return projections.stream()
+        Map<String, BigDecimal> totals = projections.stream()
                 .collect(Collectors.groupingBy(
                         p -> String.format("%d-%02d", year, p.month()),
                         Collectors.reducing(
@@ -47,6 +47,13 @@ public class PivotReportBuilder {
                                 BigDecimal::add
                         )
                 ));
+
+        // Grand total across all months (consumed by the frontend's TOTAL column / footer)
+        BigDecimal grandTotal = totals.values().stream()
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        totals.put("TOTAL", grandTotal);
+
+        return totals;
     }
 
     private List<PivotTreeNodeDTO> buildPivotTree(List<PivotReportProjection> projections, int year) {
@@ -112,7 +119,7 @@ public class PivotReportBuilder {
                     2,
                     "CATEGORY",
                     first.categoryName(),
-                    first.categoryName(),
+                    first.categoryNameEn() != null ? first.categoryNameEn() : first.categoryName(),
                     first.categoryTechnical(),
                     monthlyValues,
                     whoChildren
@@ -168,7 +175,7 @@ public class PivotReportBuilder {
     }
 
     private Map<String, BigDecimal> buildMonthlyValues(List<PivotReportProjection> projections, int year) {
-        return projections.stream()
+        Map<String, BigDecimal> monthly = projections.stream()
                 .collect(Collectors.groupingBy(
                         p -> String.format("%d-%02d", year, p.month()),
                         Collectors.reducing(
@@ -177,5 +184,12 @@ public class PivotReportBuilder {
                                 BigDecimal::add
                         )
                 ));
+
+        // Row-level total across all months (consumed by the frontend's sticky TOTAL column)
+        BigDecimal rowTotal = monthly.values().stream()
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        monthly.put("TOTAL", rowTotal);
+
+        return monthly;
     }
 }

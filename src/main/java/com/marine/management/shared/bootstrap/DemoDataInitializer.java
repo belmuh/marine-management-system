@@ -1,7 +1,6 @@
 package com.marine.management.shared.bootstrap;
 
 
-import com.marine.management.modules.finance.application.ApprovalService;
 import com.marine.management.modules.finance.application.TenantReferenceDataInitializer;
 import com.marine.management.modules.finance.domain.entities.*;
 import com.marine.management.modules.finance.domain.enums.*;
@@ -19,15 +18,29 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.*;
 
-@Component // ← Component olarak kaydet
+/**
+ * Dev-profile demo data.
+ *
+ * DEMO DATA PHILOSOPHY:
+ * - Geçmiş aylar: temiz, kapanmış kayıtlar (APPROVED → PAID) — raporlar dolu ve doğru görünür.
+ * - Güncel açık işler: AZ sayıda (2 taslak, 3 onay bekleyen, 2 ödeme bekleyen,
+ *   1 kısmi ödenmiş, 1 reddedilmiş) — onay/ödeme listeleri gerçekçi kalır, şişmez.
+ * - Her gider kaydına WHO + MainCategory atanır — drill-down raporlar demo'da çalışır.
+ * - Tarihler bugüne göre görelidir; demo hiç eskimez.
+ * - Entry numaraları DB sequence'tan alınır (W1: bellekte sayaç → duplicate çakışması).
+ */
+@Component
 @Profile("dev")
 @Order(400)
 public class DemoDataInitializer implements CommandLineRunner {
@@ -43,11 +56,19 @@ public class DemoDataInitializer implements CommandLineRunner {
     private final PasswordEncoder passwordEncoder;
     private final TenantReferenceDataInitializer tenantReferenceDataInitializer;
     private final TenantMainCategoryRepository mainCategoryRepository;
+    private final TenantWhoSelectionRepository tenantWhoRepository;
     private final FinancialCategoryRepository financialCategoryRepository;
     private final FinancialEntryRepository entryRepository;
-    private final ApprovalService approvalService;
 
     private final Random random = new Random();
+
+    private static final String[] EXPENSE_VENDORS = {"Shell Marina", "Migros", "Teknosa", "Marina Market",
+            "Marmaris Diesel", "Bodrum Ship Supply", "Turgutreis Tekne", "Fethiye Marina",
+            "Göcek Provisions", "Yalıkavak Port"};
+    private static final String[] INCOME_VENDORS = {"Charter Client A", "Charter Client B", "Yacht Show Prize",
+            "Insurance Refund", "Equipment Resale", "Marina Sublease"};
+    private static final String[] CITIES = {"Istanbul", "Marmaris", "Bodrum", "Fethiye", "Göcek", "Antalya"};
+    private static final String[] COUNTRIES = {"Turkey", "Greece", "Croatia", "Italy"};
 
     public DemoDataInitializer(
             OrganizationRepository organizationRepository,
@@ -55,21 +76,21 @@ public class DemoDataInitializer implements CommandLineRunner {
             PasswordEncoder passwordEncoder,
             TenantReferenceDataInitializer tenantReferenceDataInitializer,
             TenantMainCategoryRepository mainCategoryRepository,
+            TenantWhoSelectionRepository tenantWhoRepository,
             FinancialCategoryRepository financialCategoryRepository,
-            FinancialEntryRepository entryRepository,
-            ApprovalService approvalService
+            FinancialEntryRepository entryRepository
     ) {
         this.organizationRepository = organizationRepository;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.tenantReferenceDataInitializer = tenantReferenceDataInitializer;
         this.mainCategoryRepository = mainCategoryRepository;
+        this.tenantWhoRepository = tenantWhoRepository;
         this.financialCategoryRepository = financialCategoryRepository;
         this.entryRepository = entryRepository;
-        this.approvalService = approvalService;
     }
 
-    @Override // ← @PostConstruct yerine @Override
+    @Override
     @Transactional
     public void run(String... args) throws Exception {
         log.info("🚀 Demo Data Initialization Started");
@@ -116,10 +137,16 @@ public class DemoDataInitializer implements CommandLineRunner {
 
             log.info("✓ Admin user created: {}", admin.getEmail());
 
+            // Audit context: AuditingEntityListener created_by_id'yi SecurityContext'ten
+            // okur; startup'ta authenticated user olmadığından null kalıyordu →
+            // financial_entries.created_by_id NOT NULL ihlali. Demo verisi admin'e atfedilir.
+            SecurityContextHolder.getContext().setAuthentication(
+                    new UsernamePasswordAuthenticationToken(admin, null, admin.getAuthorities()));
+
             // ============================================
-            // STEP 4: Initialize Reference Data
+            // STEP 4: Initialize Reference Data (+ starter categories, TR names)
             // ============================================
-            tenantReferenceDataInitializer.initializeTenantReferenceData();
+            tenantReferenceDataInitializer.initializeTenantReferenceData(null, null, "TR");
 
             log.info("✓ Reference data initialized for tenant: {}", tenantId);
 
@@ -147,16 +174,18 @@ public class DemoDataInitializer implements CommandLineRunner {
             log.info("✓ Activated {} main categories", activeMainCategories.size());
 
             // ============================================
-            // STEP 8: Create Financial Categories
+            // STEP 8: Load Starter Categories (seeded in STEP 4)
+            // Tenant-explicit sorgu: CommandLineRunner'da Hibernate tenant filtresi aktif değil.
             // ============================================
-            List<FinancialCategory> financialCategories = createFinancialCategories(activeMainCategories);
-            log.info("✓ Created {} financial categories", financialCategories.size());
+            List<FinancialCategory> financialCategories =
+                    financialCategoryRepository.findByTenantIdOrderByDisplayOrderAsc(tenantId);
+            log.info("✓ Loaded {} starter categories", financialCategories.size());
 
             // ============================================
             // STEP 9: Generate Financial Entries
             // ============================================
             if (!financialCategories.isEmpty()) {
-                generateFinancialEntries(financialCategories, demoUsers, admin);
+                generateFinancialEntries(financialCategories, activeMainCategories, demoUsers, admin);
             }
 
             log.info("🎉 Demo data initialization completed!");
@@ -171,8 +200,9 @@ public class DemoDataInitializer implements CommandLineRunner {
             log.error("❌ Demo data initialization failed", e);
             throw new RuntimeException("Failed to initialize demo data", e);
         } finally {
-            // ✅ Clear tenant context
+            // ✅ Clear tenant + security context
             TenantContext.clear();
+            SecurityContextHolder.clearContext();
         }
     }
 
@@ -201,205 +231,288 @@ public class DemoDataInitializer implements CommandLineRunner {
         }
     }
 
-    private List<FinancialCategory> createFinancialCategories(List<TenantMainCategory> activeMainCategories) {
-        List<FinancialCategory> categories = new ArrayList<>();
-        String[][] suffixes = {{"Regular", "Special"}, {"Monthly", "Quarterly"}};
+    // ═══════════════════════════════════════════════════════════════
+    // ENTRY GENERATION
+    // ═══════════════════════════════════════════════════════════════
 
-        for (TenantMainCategory mainCategory : activeMainCategories) {
-            for (int i = 0; i < 2; i++) {
-                String suffix = suffixes[i % 2][random.nextInt(suffixes[i % 2].length)];
-                String name = mainCategory.getMainCategory().getNameEn() + " - " + suffix;
-
-                Optional<FinancialCategory> existing = financialCategoryRepository.findByName(name);
-                if (existing.isEmpty()) {
-                    categories.add(financialCategoryRepository.save(FinancialCategory.create(
-                            name, RecordType.EXPENSE, "Demo: " + name, i + 1, true)));
-                } else {
-                    categories.add(existing.get());
-                }
-            }
-        }
-        return categories;
-    }
-
-    private void generateFinancialEntries(List<FinancialCategory> categories, List<User> demoUsers, User admin) {
+    private void generateFinancialEntries(
+            List<FinancialCategory> categories,
+            List<TenantMainCategory> mainCategories,
+            List<User> demoUsers,
+            User admin
+    ) {
         log.info("💰 Generating sample financial entries...");
 
-        // Kullanıcıları role'e göre ayır
-        User captain = demoUsers.stream().filter(u -> u.getRoleEnum() == Role.CAPTAIN).findFirst().orElse(admin);
-        User manager = demoUsers.stream().filter(u -> u.getRoleEnum() == Role.MANAGER).findFirst().orElse(admin);
-        List<User> crewMembers = demoUsers.stream().filter(u -> u.getRoleEnum() == Role.CREW).toList();
+        User captain = demoUsers.stream()
+                .filter(u -> u.getRoleEnum() == Role.CAPTAIN).findFirst().orElse(admin);
+        List<TenantWhoSelection> whoSelections = tenantWhoRepository.findAllActiveWithWho();
 
-        LocalDate start = LocalDate.of(2025, 8, 1);
-        LocalDate end = LocalDate.of(2026, 2, 28);
-        int counter = 1;
-
-        String[] expenseVendors = {"Shell Marina", "Migros", "Teknosa", "Marina Market", "Marmaris Diesel",
-                "Bodrum Ship Supply", "Turgutreis Tekne", "Fethiye Marina", "Göcek Provisions", "Yalıkavak Port"};
-        String[] incomeVendors = {"Charter Client A", "Charter Client B", "Yacht Show Prize",
-                "Insurance Refund", "Equipment Resale", "Marina Sublease"};
-        String[] cities = {"Istanbul", "Marmaris", "Bodrum", "Fethiye", "Göcek", "Antalya"};
-        String[] countries = {"Turkey", "Greece", "Croatia", "Italy"};
-
-        // ═══════════════════════════════════════════════════════════════
-        // EXPENSE ENTRIES
-        // ═══════════════════════════════════════════════════════════════
         List<FinancialCategory> expenseCategories = categories.stream()
                 .filter(c -> c.getCategoryType() == RecordType.EXPENSE)
                 .toList();
-
         if (expenseCategories.isEmpty()) {
             expenseCategories = categories; // fallback
         }
 
-        for (LocalDate date = start; !date.isAfter(end); date = date.plusMonths(1)) {
-            int entryCount = 5 + random.nextInt(11);
+        LocalDate today = LocalDate.now();
+
+        // ───────────────────────────────────────────────────────────
+        // 1) GEÇMİŞ AYLAR — kapanmış kayıtlar (PAID)
+        //    Raporların dolu görünmesi için; açık iş listelerini şişirmez.
+        // ───────────────────────────────────────────────────────────
+        LocalDate firstMonth = today.minusMonths(9).withDayOfMonth(1);
+        LocalDate currentMonth = today.withDayOfMonth(1);
+
+        for (LocalDate month = firstMonth; month.isBefore(currentMonth); month = month.plusMonths(1)) {
+            int entryCount = 6 + random.nextInt(5); // 6–10 / ay
 
             for (int i = 0; i < entryCount; i++) {
-                double amount = 50 + random.nextDouble() * 5950; // 50–6000 EUR range
-                LocalDate entryDate = date.plusDays(random.nextInt(Math.min(28, date.lengthOfMonth())));
-                User submitter = crewMembers.isEmpty() ? admin : crewMembers.get(random.nextInt(crewMembers.size()));
-                String city = cities[random.nextInt(cities.length)];
-                String country = countries[random.nextInt(countries.length)];
-
-                FinancialEntry entry = FinancialEntry.create(
-                        EntryNumber.generate(counter++),
-                        RecordType.EXPENSE,
-                        expenseCategories.get(random.nextInt(expenseCategories.size())),
-                        Money.of(String.format("%.2f", amount), "EUR"),
-                        entryDate,
-                        randomPaymentMethod(),
-                        "Demo expense - " + expenseVendors[random.nextInt(expenseVendors.length)],
-                        null, null,
-                        expenseVendors[random.nextInt(expenseVendors.length)],
-                        country, city, null, null
-                );
-                entry = entryRepository.save(entry);
-
-                // Gerçekçi approval senaryoları
-                double scenario = random.nextDouble();
-
-                if (scenario < 0.30) {
-                    // %30 — DRAFT kalır (henüz submit edilmemiş)
-                    // Do nothing
-
-                } else if (scenario < 0.55) {
-                    // PENDING_CAPTAIN
-                    entry.submit();
-                    entryRepository.save(entry);
-
-                } else if (scenario < 0.80) {
-                    // APPROVED (full flow)
-                    entry.submit();
-                    Organization tenant = captain.getOrganization();
-                    boolean needsManager = isManagerApprovalRequired(entry, tenant);
-                    entry.approveByCaptain(needsManager);
-                    if (needsManager) {
-                        entry.approveByManager();
-                    }
-                    entryRepository.save(entry);
-
-                } else if (scenario < 0.90) {
-                    // Captain submit — limit'e göre
-                    Organization tenant = captain.getOrganization();
-                    boolean needsManager = isManagerApprovalRequired(entry, tenant);
-                    if (needsManager) {
-                        entry.submitToManager();
-                    } else {
-                        entry.submitAndApprove();
-                    }
-                    entryRepository.save(entry);
-
-
-                } else {
-                    // REJECTED
-                    entry.submit();
-                    entry.reject("Amount seems incorrect, please verify");
-                    entryRepository.save(entry);
-                }
+                FinancialEntry entry = createDemoExpense(
+                        expenseCategories, whoSelections, mainCategories, randomDateInMonth(month));
+                entry.submitAndApprove();
+                payFully(entry, captain);
+                entryRepository.save(entry);
             }
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        // INCOME ENTRIES
-        // ═══════════════════════════════════════════════════════════════
+        // ───────────────────────────────────────────────────────────
+        // 2) GÜNCEL AÇIK İŞLER — az sayıda, gerçekçi
+        // ───────────────────────────────────────────────────────────
+
+        // 2 taslak (henüz submit edilmemiş)
+        for (int i = 0; i < 2; i++) {
+            entryRepository.save(createDemoExpense(
+                    expenseCategories, whoSelections, mainCategories, recentDate(today)));
+        }
+
+        // 3 kaptan onayı bekleyen
+        for (int i = 0; i < 3; i++) {
+            FinancialEntry entry = createDemoExpense(
+                    expenseCategories, whoSelections, mainCategories, recentDate(today));
+            entry.submit();
+            entryRepository.save(entry);
+        }
+
+        // 2 onaylanmış, ödeme bekleyen
+        for (int i = 0; i < 2; i++) {
+            FinancialEntry entry = createDemoExpense(
+                    expenseCategories, whoSelections, mainCategories, recentDate(today));
+            entry.submitAndApprove();
+            entryRepository.save(entry);
+        }
+
+        // 1 kısmi ödenmiş
+        FinancialEntry partiallyPaid = createDemoExpense(
+                expenseCategories, whoSelections, mainCategories, recentDate(today));
+        partiallyPaid.submitAndApprove();
+        payHalf(partiallyPaid, captain);
+        entryRepository.save(partiallyPaid);
+
+        // 1 reddedilmiş
+        FinancialEntry rejected = createDemoExpense(
+                expenseCategories, whoSelections, mainCategories, recentDate(today));
+        rejected.submit();
+        rejected.reject("Amount seems incorrect, please verify");
+        entryRepository.save(rejected);
+
+        // ───────────────────────────────────────────────────────────
+        // 3) GELİRLER — aylık 1-2 kapanmış + 1 güncel bekleyen
+        // ───────────────────────────────────────────────────────────
         log.info("💵 Generating sample income entries...");
 
-        // Income kategorileri oluştur (yoksa)
-        List<FinancialCategory> incomeCategories = createIncomeCategoriesIfNeeded();
+        List<FinancialCategory> incomeCategories = categories.stream()
+                .filter(c -> c.getCategoryType() == RecordType.INCOME)
+                .toList();
 
         if (!incomeCategories.isEmpty()) {
-            for (LocalDate date = start; !date.isAfter(end); date = date.plusMonths(1)) {
-                int incomeCount = 1 + random.nextInt(3); // Ayda 1-3 gelir
-
+            for (LocalDate month = firstMonth; month.isBefore(currentMonth); month = month.plusMonths(1)) {
+                int incomeCount = 1 + random.nextInt(2); // ayda 1-2 gelir
                 for (int i = 0; i < incomeCount; i++) {
-                    double amount = 500 + random.nextDouble() * 19500; // 500–20000 EUR
-                    LocalDate entryDate = date.plusDays(random.nextInt(Math.min(28, date.lengthOfMonth())));
-                    String vendor = incomeVendors[random.nextInt(incomeVendors.length)];
-
-                    FinancialEntry income = FinancialEntry.create(
-                            EntryNumber.generate(counter++),
-                            RecordType.INCOME,
-                            incomeCategories.get(random.nextInt(incomeCategories.size())),
-                            Money.of(String.format("%.2f", amount), "EUR"),
-                            entryDate,
-                            random.nextBoolean() ? PaymentMethod.BANK_TRANSFER : PaymentMethod.CASH,
-                            "Income - " + vendor,
-                            null, null,
-                            vendor,
-                            "Turkey",
-                            cities[random.nextInt(cities.length)],
-                            null, null
-                    );
-                    income = entryRepository.save(income);
-
-                    // Income'lar genelde direkt approve edilir
-                    if (random.nextDouble() < 0.7) {
-                        try {
-                            approvalService.submit(income.getEntryId(), captain);
-                        } catch (Exception e) {
-                            log.warn("Income submit failed: {}", e.getMessage());
-                        }
-                    }
+                    FinancialEntry income = createDemoIncome(incomeCategories, randomDateInMonth(month));
+                    income.submitAndApprove();
+                    payFully(income, captain);
+                    entryRepository.save(income);
                 }
             }
+
+            // 1 güncel, onay bekleyen gelir
+            FinancialEntry pendingIncome = createDemoIncome(incomeCategories, recentDate(today));
+            pendingIncome.submit();
+            entryRepository.save(pendingIncome);
         }
 
         log.info("✓ Generated {} total entries (expenses + incomes)", entryRepository.count());
     }
-    // ApprovalService'teki ile aynı logic — DemoDataInitializer'a kopyala
-    private boolean isManagerApprovalRequired(FinancialEntry entry, Organization tenant) {
-        if (!tenant.isManagerApprovalEnabled()) return false;
-        BigDecimal limit = tenant.getApprovalLimit();
-        if (limit == null) return false;
-        return entry.getBaseAmount().getAmount().compareTo(limit) > 0;
+
+    private FinancialEntry createDemoExpense(
+            List<FinancialCategory> categories,
+            List<TenantWhoSelection> whoSelections,
+            List<TenantMainCategory> mainCategories,
+            LocalDate entryDate
+    ) {
+        double amount = 50 + random.nextDouble() * 2950; // 50–3000 EUR
+        FinancialCategory category = categories.get(random.nextInt(categories.size()));
+        TenantMainCategory mainCategory = resolveMainCategory(category, null, mainCategories);
+        TenantWhoSelection who = resolveWho(mainCategory, whoSelections);
+        String vendor = EXPENSE_VENDORS[random.nextInt(EXPENSE_VENDORS.length)];
+
+        return FinancialEntry.create(
+                nextEntryNumber(),
+                RecordType.EXPENSE,
+                category,
+                Money.of(formatAmount(amount), "EUR"),
+                entryDate,
+                randomPaymentMethod(),
+                "Demo expense - " + vendor,
+                who,
+                mainCategory,
+                vendor,
+                COUNTRIES[random.nextInt(COUNTRIES.length)],
+                CITIES[random.nextInt(CITIES.length)],
+                null,
+                vendor,
+                "EUR"
+        );
     }
+
+    private FinancialEntry createDemoIncome(List<FinancialCategory> incomeCategories, LocalDate entryDate) {
+        double amount = 500 + random.nextDouble() * 19500; // 500–20000 EUR
+        String vendor = INCOME_VENDORS[random.nextInt(INCOME_VENDORS.length)];
+
+        return FinancialEntry.create(
+                nextEntryNumber(),
+                RecordType.INCOME,
+                incomeCategories.get(random.nextInt(incomeCategories.size())),
+                Money.of(formatAmount(amount), "EUR"),
+                entryDate,
+                random.nextBoolean() ? PaymentMethod.BANK_TRANSFER : PaymentMethod.CASH,
+                "Income - " + vendor,
+                null,
+                null,
+                vendor,
+                "Turkey",
+                CITIES[random.nextInt(CITIES.length)],
+                null,
+                null,
+                "EUR"
+        );
+    }
+
     /**
-     * Create income categories if they don't exist.
+     * Gider kaydının ana kategorisini, satır-kalemi kategorisinin kanonik eşlemesinden
+     * çözer; böylece pivot/drill-down raporlarda kategori her zaman doğru ana kategori
+     * altında toplanır (rastgele eşleme demo'yu tutarsız gösteriyordu).
+     *
+     * Öncelik: 1) kategori → ana kategori kanonik eşleme,
+     *          2) WHO'nun önerdiği ana kategori, 3) son çare rastgele.
      */
-    private List<FinancialCategory> createIncomeCategoriesIfNeeded() {
-        List<FinancialCategory> incomeCategories = new ArrayList<>();
+    private TenantMainCategory resolveMainCategory(
+            FinancialCategory category,
+            TenantWhoSelection who,
+            List<TenantMainCategory> mainCategories
+    ) {
+        if (mainCategories.isEmpty()) {
+            return null;
+        }
 
-        String[] incomeCatNames = {
-                "Charter Income",
-                "Refunds & Returns",
-                "Equipment Sale",
-                "Subsidies & Grants",
-                "Other Income"
-        };
-
-        for (String catName : incomeCatNames) {
-            Optional<FinancialCategory> existing = financialCategoryRepository.findByName(catName);
-            if (existing.isEmpty()) {
-                incomeCategories.add(financialCategoryRepository.save(
-                        FinancialCategory.create(catName, RecordType.INCOME, "Demo: " + catName, 1, true)
-                ));
-            } else {
-                incomeCategories.add(existing.get());
+        // 1) Kategori → ana kategori (tutarlı ağaç)
+        String mainEn = TenantReferenceDataInitializer.mainCategoryNameEnFor(category.getName());
+        if (mainEn != null) {
+            for (TenantMainCategory mc : mainCategories) {
+                if (mainEn.equals(mc.getMainCategory().getNameEn())) {
+                    return mc;
+                }
             }
         }
 
-        return incomeCategories;
+        // 2) WHO önerisi
+        if (who != null && who.getWho().getSuggestedMainCategoryId() != null) {
+            Long suggestedId = who.getWho().getSuggestedMainCategoryId();
+            for (TenantMainCategory mc : mainCategories) {
+                if (mc.getMainCategory().getId().equals(suggestedId)) {
+                    return mc;
+                }
+            }
+        }
+
+        // 3) Son çare: rastgele
+        return mainCategories.get(random.nextInt(mainCategories.size()));
+    }
+
+    /**
+     * Ana kategoriyle tutarlı bir WHO seçer: WHO'nun önerdiği ana kategori
+     * (suggestedMainCategoryId) kaydın ana kategorisiyle eşleşmeli. Böylece
+     * "Maintenance → Jeneratör", "Crew → Kaptan", "Fuel → Tender" gibi anlamlı
+     * kırılımlar çıkar; "Visas → Tesisat" gibi saçmalıklar olmaz.
+     *
+     * Eşleşen WHO yoksa (ör. Sigorta, İletişim) WHO atanmaz (null) — bu kategoriler
+     * kişi/sisteme bağlı olmadığından drill-down'da WHO seviyesi olmaz.
+     */
+    private TenantWhoSelection resolveWho(
+            TenantMainCategory mainCategory,
+            List<TenantWhoSelection> whoSelections
+    ) {
+        if (whoSelections.isEmpty() || mainCategory == null) {
+            return null;
+        }
+
+        Long mainCategoryId = mainCategory.getMainCategory().getId();
+        List<TenantWhoSelection> matches = whoSelections.stream()
+                .filter(w -> mainCategoryId.equals(w.getWho().getSuggestedMainCategoryId()))
+                .toList();
+
+        if (matches.isEmpty()) {
+            return null;
+        }
+        return matches.get(random.nextInt(matches.size()));
+    }
+
+    /** Tam ödeme — kayıt PAID durumuna geçer. Ödeme tarihi: kayıt tarihinden 0-5 gün sonra. */
+    private void payFully(FinancialEntry entry, User recordedBy) {
+        Payment payment = Payment.create(
+                entry,
+                entry.getBaseAmount(),
+                entry.getEntryDate().plusDays(random.nextInt(6)),
+                null,
+                randomPaymentMethod(),
+                "Demo payment",
+                recordedBy
+        );
+        entry.addPayment(payment);
+    }
+
+    /** Yarım ödeme — kayıt PARTIALLY_PAID durumunda kalır. */
+    private void payHalf(FinancialEntry entry, User recordedBy) {
+        BigDecimal half = entry.getBaseAmount().getAmount()
+                .divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
+        Payment payment = Payment.create(
+                entry,
+                Money.of(half, "EUR"),
+                entry.getEntryDate().plusDays(random.nextInt(6)),
+                null,
+                randomPaymentMethod(),
+                "Demo partial payment",
+                recordedBy
+        );
+        entry.addPayment(payment);
+    }
+
+    /** DB sequence'tan numara üretir (W1: bellekteki sayaç sonradan girilen kayıtlarla çakışıyordu). */
+    private EntryNumber nextEntryNumber() {
+        return EntryNumber.generate(entryRepository.getNextSequence());
+    }
+
+    /** Locale'den bağımsız tutar formatı — TR locale'de "%.2f" virgül üretir ve Money parse'ı bozulur. */
+    private String formatAmount(double amount) {
+        return String.format(Locale.US, "%.2f", amount);
+    }
+
+    private LocalDate randomDateInMonth(LocalDate month) {
+        return month.plusDays(random.nextInt(Math.min(28, month.lengthOfMonth())));
+    }
+
+    private LocalDate recentDate(LocalDate today) {
+        return today.minusDays(random.nextInt(14));
     }
 
     private PaymentMethod randomPaymentMethod() {

@@ -14,6 +14,7 @@ public record TreeReportProjection(
         Boolean mainCategoryTechnical,
         UUID categoryId,
         String categoryName,
+        String categoryNameEn,
         Boolean categoryTechnical,
         Long whoId,
         String whoNameTr,

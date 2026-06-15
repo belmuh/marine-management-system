@@ -154,7 +154,8 @@ public class OnboardingController {
         try {
             tenantReferenceDataInitializer.initializeTenantReferenceData(
                     request.selectedMainCategoryIds(),
-                    request.selectedWhoIds()
+                    request.selectedWhoIds(),
+                    request.flagCountry()
             );
         } finally {
             TenantContext.clear();

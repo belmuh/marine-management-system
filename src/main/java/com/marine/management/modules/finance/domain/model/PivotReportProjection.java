@@ -13,6 +13,7 @@ public record PivotReportProjection(
         Boolean mainCategoryTechnical,
         UUID categoryId,
         String categoryName,
+        String categoryNameEn,
         Boolean categoryTechnical,
         Long whoId,
         String whoNameTr,

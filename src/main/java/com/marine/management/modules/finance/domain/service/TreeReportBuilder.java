@@ -106,7 +106,7 @@ public class TreeReportBuilder {
                 NodeType.CATEGORY.getTypeName(),
                 categoryId.toString(),
                 first.categoryName(),
-                first.categoryName(),
+                first.categoryNameEn() != null ? first.categoryNameEn() : first.categoryName(),
                 categoryTotal,
                 calculatePercentage(categoryTotal, parentTotal),
                 first.categoryTechnical(),

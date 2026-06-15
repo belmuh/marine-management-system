@@ -25,6 +25,16 @@ public interface FinancialCategoryRepository extends JpaRepository<FinancialCate
 
     boolean existsByName(String name);
 
+    /**
+     * Tenant-EXPLICIT queries — do not rely on the Hibernate tenant filter.
+     * The filter is only activated by TenantFilter inside an authenticated HTTP request;
+     * onboarding and CommandLineRunner contexts (demo data) run WITHOUT the filter,
+     * so filter-dependent queries would see other tenants' rows there.
+     */
+    long countByTenantId(Long tenantId);
+
+    List<FinancialCategory> findByTenantIdOrderByDisplayOrderAsc(Long tenantId);
+
     @Query("SELECT c FROM FinancialCategory c WHERE " +
             "LOWER(c.name) LIKE LOWER(CONCAT('%', :searchTerm, '%'))")
     List<FinancialCategory> search(@Param("searchTerm") String searchTerm);

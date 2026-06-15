@@ -30,7 +30,7 @@ public class FinancialCategoryController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('CATEGORY_MANAGE')")
     public ResponseEntity<CategoryResponseDto> create(@Valid @RequestBody CategoryRequestDto request) {
         FinancialCategory category = categoryService.create(
                 request.name(),
@@ -98,7 +98,7 @@ public class FinancialCategoryController {
 
     // UPDATE
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('CATEGORY_MANAGE')")
     public ResponseEntity<CategoryResponseDto> update(
             @PathVariable UUID id,
             @Valid @RequestBody CategoryRequestDto request
@@ -115,7 +115,7 @@ public class FinancialCategoryController {
     }
 
     @PatchMapping("/{id}/display-order")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('CATEGORY_MANAGE')")
     public ResponseEntity<CategoryResponseDto> updateDisplayOrder(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateDisplayOrderRequest request
@@ -129,14 +129,14 @@ public class FinancialCategoryController {
     }
 
     @PatchMapping("/{id}/activate")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('CATEGORY_MANAGE')")
     public ResponseEntity<CategoryResponseDto> activate(@PathVariable UUID id) {
         FinancialCategory category = categoryService.activate(id);
         return ResponseEntity.ok(CategoryResponseDto.from(category));
     }
 
     @PatchMapping("/{id}/deactivate")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('CATEGORY_MANAGE')")
     public ResponseEntity<CategoryResponseDto> deactivate(@PathVariable UUID id) {
         FinancialCategory category = categoryService.deactivate(id);
         return ResponseEntity.ok(CategoryResponseDto.from(category));
@@ -144,7 +144,7 @@ public class FinancialCategoryController {
 
     // DELETE (soft delete)
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('CATEGORY_MANAGE')")
     public ResponseEntity<Void> delete(
             @PathVariable UUID id,
             @AuthenticationPrincipal User currentUser

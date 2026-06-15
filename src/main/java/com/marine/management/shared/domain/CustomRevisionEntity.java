@@ -27,6 +27,10 @@ import java.util.UUID;
         @Index(name = "idx_revinfo_user_id", columnList = "user_id"),
         @Index(name = "idx_revinfo_timestamp", columnList = "revtstmp")
 })
+@AttributeOverrides({
+        @AttributeOverride(name = "id", column = @Column(name = "rev")),
+        @AttributeOverride(name = "timestamp", column = @Column(name = "revtstmp"))
+})
 @RevisionEntity(CustomRevisionListener.class)
 public class CustomRevisionEntity extends DefaultRevisionEntity {
 

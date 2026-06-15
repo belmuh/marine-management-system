@@ -8,6 +8,7 @@ import java.util.UUID;
 public record CategoryResponseDto(
         UUID id,
         String name,
+        String nameEn,
         RecordType categoryType,
         String description,
         boolean enabled,
@@ -19,6 +20,7 @@ public record CategoryResponseDto(
         return new CategoryResponseDto(
                 category.getId(),
                 category.getName(),
+                category.getNameEn(),
                 category.getCategoryType(),
                 category.getDescription(),
                 category.isEnabled(),
