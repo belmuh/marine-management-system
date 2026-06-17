@@ -3,6 +3,7 @@ package com.marine.management.modules.auth.infrastructure;
 import com.marine.management.shared.security.TenantAwareUserDetails;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
@@ -38,8 +39,18 @@ public class JwtUtil {
     @Value("${refresh.token.expiration}")
     private long refreshExpirationMs;
 
+    @PostConstruct
+    public void validateSecret() {
+        if (secret == null || secret.getBytes(StandardCharsets.UTF_8).length < 32) {
+            throw new IllegalStateException(
+                "JWT secret must be at least 256 bits (32 characters). " +
+                "Set a strong value for the JWT_SECRET environment variable."
+            );
+        }
+    }
+
     private SecretKey getSigningKey() {
-        return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));  //  Explicit charset
+        return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
     /**
@@ -60,11 +71,11 @@ public class JwtUtil {
         }
 
         return Jwts.builder()
-                .setClaims(claims)
-                .setSubject(userDetails.getUsername())
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + expirationMs))
-                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+                .claims(claims)
+                .subject(userDetails.getUsername())
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + expirationMs))
+                .signWith(getSigningKey())
                 .compact();
     }
 
@@ -102,11 +113,11 @@ public class JwtUtil {
     }
 
     private Claims extractAllClaims(String token) {
-        return Jwts.parserBuilder()
-                .setSigningKey(getSigningKey())
+        return Jwts.parser()
+                .verifyWith(getSigningKey())
                 .build()
-                .parseClaimsJws(token)
-                .getBody();
+                .parseSignedClaims(token)
+                .getPayload();
     }
 
     public Boolean isTokenValid(String token, UserDetails userDetails) {

@@ -8,9 +8,13 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Base64;
+import java.util.HexFormat;
 import java.util.UUID;
 
 @Service
@@ -26,26 +30,37 @@ public class RefreshTokenService {
         this.userRepository = userRepository;
     }
 
-    public RefreshToken createRefreshToken(UUID userId, String ipAddress, String userAgent) {
+    /**
+     * Creates a refresh token for the user.
+     * The raw token is returned to the caller (for sending to the client);
+     * only its SHA-256 hash is persisted in the database.
+     */
+    public String createRefreshToken(UUID userId, String ipAddress, String userAgent) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // Delete old refresh tokens
         refreshTokenRepository.deleteByUserId(userId);
 
+        String rawToken = generateSecureToken();
+
         RefreshToken refreshToken = new RefreshToken(
-                generateSecureToken(),
+                hashToken(rawToken),
                 user,
                 LocalDateTime.now().plusDays(7),
                 ipAddress,
                 userAgent
         );
 
-        return refreshTokenRepository.save(refreshToken);
+        refreshTokenRepository.save(refreshToken);
+        return rawToken;
     }
 
-    public User validateRefreshToken(String token) {
-        RefreshToken refreshToken = refreshTokenRepository.findByToken(token)
+    /**
+     * Validates the raw refresh token sent by the client.
+     * Hashes it before looking up in the database.
+     */
+    public User validateRefreshToken(String rawToken) {
+        RefreshToken refreshToken = refreshTokenRepository.findByToken(hashToken(rawToken))
                 .orElseThrow(() -> new RuntimeException("Invalid refresh token"));
 
         if (refreshToken.isExpired()) {
@@ -56,8 +71,11 @@ public class RefreshTokenService {
         return refreshToken.getUser();
     }
 
-    public void deleteRefreshToken(String token) {
-        refreshTokenRepository.findByToken(token)
+    /**
+     * Deletes the refresh token matching the raw token sent by the client.
+     */
+    public void deleteRefreshToken(String rawToken) {
+        refreshTokenRepository.findByToken(hashToken(rawToken))
                 .ifPresent(refreshTokenRepository::delete);
     }
 
@@ -70,5 +88,15 @@ public class RefreshTokenService {
         byte[] randomBytes = new byte[64];
         new SecureRandom().nextBytes(randomBytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
+    }
+
+    private String hashToken(String rawToken) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(rawToken.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 not available", e);
+        }
     }
 }

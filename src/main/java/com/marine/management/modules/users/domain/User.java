@@ -140,29 +140,17 @@ public class User extends BaseAuditedEntity implements UserDetails, TenantAwareU
     public Collection<? extends GrantedAuthority> getAuthorities() {
         Set<GrantedAuthority> authorities = new HashSet<>();
 
-        System.out.println("=== DEBUG getAuthorities ===");
-        System.out.println("User: " + this.email);
-        System.out.println("Role field: " + this.role);
-
         if (this.role == null) {
-            System.out.println("WARNING: Role is NULL!");
             return authorities;
         }
 
         // 1. Role authority (ROLE_ prefix for Spring Security hasRole() check)
         authorities.add(new SimpleGrantedAuthority("ROLE_" + role.name()));
 
-        Set<Permission> permissions = role.getAllPermissions();
-        System.out.println("Permissions count: " + permissions.size());
-        System.out.println("Permissions: " + permissions);
-
         // 2. Permission authorities (without prefix for hasAuthority() check)
         role.getAllPermissions().forEach(permission ->
                 authorities.add(new SimpleGrantedAuthority(permission.name()))
         );
-
-        System.out.println("Total authorities: " + authorities);
-        System.out.println("=== END DEBUG ===");
 
         return authorities;
     }

@@ -85,7 +85,7 @@ public class AuthService {
                 user.getUserId(),
                 ipAddress,
                 userAgent
-        ).getToken();
+        );
 
         return AuthResult.from(
                 accessToken,
