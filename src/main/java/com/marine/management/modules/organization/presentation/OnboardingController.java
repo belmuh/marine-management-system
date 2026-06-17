@@ -6,8 +6,6 @@ import com.marine.management.modules.finance.domain.entities.Who;
 import com.marine.management.modules.finance.infrastructure.MainCategoryRepository;
 import com.marine.management.modules.finance.infrastructure.WhoRepository;
 import com.marine.management.modules.organization.application.OrganizationOnboardingService;
-import com.marine.management.modules.organization.application.commands.OnboardingResult;
-import com.marine.management.modules.organization.application.commands.RegisterYachtCommand;
 import com.marine.management.modules.organization.domain.Organization;
 import com.marine.management.modules.organization.domain.YachtType;
 import com.marine.management.modules.organization.infrastructure.OrganizationRepository;
@@ -55,53 +53,6 @@ public class OnboardingController {
         this.whoRepository = whoRepository;
         this.organizationRepository = organizationRepository;
         this.tenantReferenceDataInitializer = tenantReferenceDataInitializer;
-    }
-
-    /**
-     * Register a new yacht organization with admin user.
-     * Receives all wizard step data in a single call.
-     */
-    @PostMapping("/register")
-    public ResponseEntity<OnboardingResponse> register(
-            @Valid @RequestBody OnboardingRequest request
-    ) {
-        logger.info("Received onboarding request for yacht: {}", request.yachtName());
-
-        RegisterYachtCommand command = new RegisterYachtCommand(
-                request.yachtName(),
-                request.yachtType(),
-                request.yachtLength(),
-                request.flagCountry(),
-                request.homeMarina(),
-                request.companyName(),
-                request.email(),
-                request.password(),
-                request.firstName(),
-                request.lastName(),
-                request.phoneNumber(),
-                request.baseCurrency(),
-                request.timezone(),
-                request.financialYearStartMonth(),
-                request.approvalLimit(),
-                request.managerApprovalEnabled(),
-                request.selectedMainCategoryIds(),
-                request.selectedWhoIds()
-        );
-
-        OnboardingResult result = onboardingService.registerYacht(command);
-
-        logger.info("Onboarding completed for yacht: {} (tenant: {})",
-                result.yachtName(), result.organizationId());
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(
-                new OnboardingResponse(
-                        result.organizationId(),
-                        result.userId(),
-                        result.yachtName(),
-                        result.email(),
-                        "Yacht registered successfully."
-                )
-        );
     }
 
     /**
