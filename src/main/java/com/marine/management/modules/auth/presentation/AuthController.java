@@ -10,15 +10,18 @@ import com.marine.management.modules.auth.domain.commands.LoginCommand;
 import com.marine.management.modules.auth.infrastructure.JwtUtil;
 import com.marine.management.modules.auth.presentation.dto.AuthResponse;
 import com.marine.management.modules.auth.presentation.dto.LoginRequest;
-import com.marine.management.modules.auth.presentation.dto.RefreshTokenRequest;
 import com.marine.management.modules.auth.presentation.dto.RefreshTokenResponse;
 import com.marine.management.modules.auth.presentation.dto.RegisterRequest;
 import com.marine.management.modules.auth.presentation.dto.RegisterResponse;
 import com.marine.management.modules.users.domain.User;
 import com.marine.management.shared.security.PublicEndpoint;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -40,11 +43,19 @@ import java.util.Map;
 @RequestMapping("/api/auth")
 public class AuthController {
 
+    private static final String REFRESH_TOKEN_COOKIE = "refreshToken";
+
     private final AuthService authService;
     private final RefreshTokenService refreshTokenService;
     private final JwtUtil jwtUtil;
     private final RegistrationService registrationService;
     private final PasswordResetService passwordResetService;
+
+    @Value("${app.cookie.secure:true}")
+    private boolean cookieSecure;
+
+    @Value("${refresh.token.expiration:604800000}")
+    private long refreshTokenExpirationMs;
 
     public AuthController(
             AuthService authService,
@@ -89,12 +100,18 @@ public class AuthController {
         AuthResponse response = AuthResponse.from(
                 authResult.user(),
                 authResult.accessToken(),
-                authResult.refreshToken(),
                 authResult.accessTokenExpiry(),
                 authResult.refreshTokenExpiry()
         );
 
-        return ResponseEntity.ok(response);
+        ResponseCookie cookie = buildRefreshTokenCookie(
+                authResult.refreshToken(),
+                refreshTokenExpirationMs / 1000
+        );
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .body(response);
     }
 
     /**
@@ -124,17 +141,21 @@ public class AuthController {
      * Does NOT generate new refresh token (use existing one).
      *
      * PUBLIC: Refresh token validation, no tenant context needed.
+     * Refresh token is read from the httpOnly cookie set at login — not from request body.
      *
-     * @param request Refresh token request
+     * @param httpRequest HTTP request containing the refreshToken httpOnly cookie
      * @return RefreshTokenResponse with new access token
      */
     @PostMapping("/refresh")
-    @PublicEndpoint(reason = "Token refresh - validates refresh token")
-    public ResponseEntity<RefreshTokenResponse> refreshToken(
-            @RequestBody RefreshTokenRequest request
-    ) {
+    @PublicEndpoint(reason = "Token refresh - validates refresh token from httpOnly cookie")
+    public ResponseEntity<RefreshTokenResponse> refreshToken(HttpServletRequest httpRequest) {
         try {
-            User user = refreshTokenService.validateRefreshToken(request.refreshToken());
+            String rawToken = extractRefreshTokenFromCookie(httpRequest);
+            if (rawToken == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
+            }
+
+            User user = refreshTokenService.validateRefreshToken(rawToken);
             String newAccessToken = jwtUtil.generateToken(user);
 
             // Permission'ları da gönder — role değişmiş olabilir
@@ -163,9 +184,18 @@ public class AuthController {
      * @return Empty response with 200 OK status
      */
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(@RequestBody RefreshTokenRequest request) {
-        refreshTokenService.deleteRefreshToken(request.refreshToken());
-        return ResponseEntity.ok().build();
+    public ResponseEntity<Void> logout(HttpServletRequest httpRequest) {
+        String rawToken = extractRefreshTokenFromCookie(httpRequest);
+        if (rawToken != null) {
+            refreshTokenService.deleteRefreshToken(rawToken);
+        }
+
+        // Cookie'yi sıfırla (maxAge=0 → tarayıcı siler)
+        ResponseCookie clearCookie = buildRefreshTokenCookie("", 0);
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, clearCookie.toString())
+                .build();
     }
 
     /**
@@ -265,6 +295,28 @@ public class AuthController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         }
+    }
+
+    // ── Cookie helpers ────────────────────────────────────────────────────────
+
+    private ResponseCookie buildRefreshTokenCookie(String value, long maxAgeSeconds) {
+        return ResponseCookie.from(REFRESH_TOKEN_COOKIE, value)
+                .httpOnly(true)
+                .secure(cookieSecure)
+                .sameSite("Strict")
+                .path("/api/auth")
+                .maxAge(maxAgeSeconds)
+                .build();
+    }
+
+    private String extractRefreshTokenFromCookie(HttpServletRequest request) {
+        if (request.getCookies() == null) return null;
+        for (Cookie cookie : request.getCookies()) {
+            if (REFRESH_TOKEN_COOKIE.equals(cookie.getName())) {
+                return cookie.getValue();
+            }
+        }
+        return null;
     }
 
     /**

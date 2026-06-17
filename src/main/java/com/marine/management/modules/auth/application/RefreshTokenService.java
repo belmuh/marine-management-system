@@ -4,6 +4,7 @@ import com.marine.management.modules.auth.domain.RefreshToken;
 import com.marine.management.modules.auth.infrastructure.RefreshTokenRepository;
 import com.marine.management.modules.users.domain.User;
 import com.marine.management.modules.users.infrastructure.UserRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +21,9 @@ import java.util.UUID;
 @Service
 @Transactional
 public class RefreshTokenService {
+
+    @Value("${refresh.token.expiration:604800000}")
+    private long refreshTokenExpirationMs;
 
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
@@ -43,10 +47,13 @@ public class RefreshTokenService {
 
         String rawToken = generateSecureToken();
 
+        LocalDateTime expiry = LocalDateTime.now()
+                .plusSeconds(refreshTokenExpirationMs / 1000);
+
         RefreshToken refreshToken = new RefreshToken(
                 hashToken(rawToken),
                 user,
-                LocalDateTime.now().plusDays(7),
+                expiry,
                 ipAddress,
                 userAgent
         );
