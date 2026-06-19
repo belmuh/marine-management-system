@@ -455,11 +455,11 @@ public class FinancialEntry extends BaseTenantEntity {
             );
         }
 
-        Money newPaidAmount = this.paidBaseAmount.subtract(paymentAmount);
-
-        if (newPaidAmount.isNegative()) {
+        if (paymentAmount.isGreaterThan(this.paidBaseAmount)) {
             throw new IllegalStateException("Reversed amount cannot exceed total paid amount");
         }
+
+        Money newPaidAmount = this.paidBaseAmount.subtract(paymentAmount);
 
         this.paidBaseAmount = newPaidAmount;
 

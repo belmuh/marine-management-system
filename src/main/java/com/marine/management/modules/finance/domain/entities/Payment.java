@@ -157,7 +157,7 @@ public class Payment extends BaseTenantEntity {
      * Validate payment business rules
      */
     private void validate() {
-        if (amount == null || amount.isZero() || amount.isNegative()) {
+        if (amount == null || amount.isZero()) {
             throw new IllegalStateException("Payment amount must be positive");
         }
 

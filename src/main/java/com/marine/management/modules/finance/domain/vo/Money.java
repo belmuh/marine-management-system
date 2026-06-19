@@ -82,10 +82,6 @@ public class Money {
         return divide(BigDecimal.valueOf(divisor));
     }
 
-    public Money negate() {
-        return new Money(this.amount.negate(), this.currencyCode);
-    }
-
     public Money abs() {
         return new Money(this.amount.abs(), this.currencyCode);
     }
@@ -135,10 +131,6 @@ public class Money {
 
     public boolean isPositive() {
         return amount.compareTo(BigDecimal.ZERO) > 0;
-    }
-
-    public boolean isNegative() {
-        return amount.compareTo(BigDecimal.ZERO) < 0;
     }
 
     public boolean isGreaterThan(Money other) {
