@@ -22,17 +22,33 @@ import java.util.List;
  * @Component
  * public class DailyReportTask extends TenantAwareScheduledTask {
  *
+ *     @Autowired
+ *     private ReportService reportService;  // @Service anotasyonlu olmalı
+ *
  *     @Scheduled(cron = "0 0 2 * * *")
  *     public void generateDailyReports() {
  *         executeForAllTenants(tenant -> {
- *             // Your business logic here
- *             // TenantContext is already set!
- *             List<FinancialEntry> entries = entryRepository.findAll();
- *             // ...
+ *             // Lambda içinde MUTLAKA @Service metoduna delege et.
+ *             reportService.generateDaily();   // ✅ doğru — AOP proxy devreye girer
+ *
+ *             // ❌ YANLIŞ — repository'yi doğrudan ÇAĞIRMA:
+ *             // entryRepository.findAll();
+ *             // JpaRepository interface metodları @annotation(Transactional) AOP
+ *             // pointcut'ına uymaz → TenantFilterAspect tetiklenmez → Hibernate @Filter
+ *             // aktif olmaz → TenantContext set edilmiş olsa bile tüm tenant'ların
+ *             // verisi döner (cross-tenant sızıntı).
  *         });
  *     }
  * }
  * </pre>
+ *
+ * <p><strong>⚠️ Mimari Not (inceleme bekliyor):</strong>
+ * TenantFilterAspect, Hibernate filtreni yalnızca Spring AOP proxy zinciri üzerinden
+ * aktif eder (@Service, @Transactional). Background job context'inde proxy zinciri dışında
+ * kalan doğrudan çağrılar filtreyi atlayabilir. Alternatif: executeForAllTenants içinde
+ * session.enableFilter(...) explicit çağrısı eklenebilir — AOP'tan bağımsız, daha güvenli.
+ * Bkz. TODO.md → "TenantAwareScheduledTask — AOP dışı filter aktivasyonu" maddesi.
+ * </p>
  */
 public abstract class TenantAwareScheduledTask {
 

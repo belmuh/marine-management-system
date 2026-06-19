@@ -45,7 +45,11 @@ public class TenantFilterAspect {
                     tenantId, joinPoint.getSignature().getName());
 
         } catch (Exception e) {
-            log.error(" AOP: Failed to enable tenant filter", e);
+            // Tenant filter açılamazsa sessizce devam etmek güvenlik ihlalidir.
+            // Cross-tenant veri sızıntısı riskinden hata fırlatmak daha güvenlidir.
+            log.error("Tenant filter could not be enabled for tenant: {} — request rejected",
+                    TenantContext.getCurrentTenantId(), e);
+            throw new IllegalStateException("Tenant filter could not be enabled", e);
         }
     }
 }
