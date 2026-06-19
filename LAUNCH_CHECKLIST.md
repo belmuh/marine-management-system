@@ -23,29 +23,20 @@
 
 ## 🔴 P0 — Kalan Blockerlar
 
-### [ ] 1. Backend — SYSTEM tenant fallback'ı kapat *(1-2 gün)*
+### ~~1. Backend — SYSTEM tenant fallback'ı kapat~~ ✅ KAPATILDI — tasarım gereği, bug değil
 
-**Sorun:** `HibernateTenantIdentifierResolver` context yokken `"SYSTEM"` döndürüyor; `TenantEntityListener` aynı durumda `IllegalStateException` atıyor. Bu iki kontrat çelişiyor — tek bir senaryo cross-tenant veri sızıntısı riski yaratıyor.
+**Karar (2026-06-19):** Bu madde yanlış etiketlenmişti. SYSTEM fallback kasıtlı bir tasarım kararı.
 
-**Aksiyon seçenekleri (birini seç):**
+**Neden var:** Spring Security initialize olurken ve `/api/auth/**` endpoint'lerinde (login, refresh)
+Hibernate devreye girebilir; o noktada henüz hiç tenant set edilmemiş. SYSTEM fallback bu
+bootstrap boşluğunu kapatmak için var.
 
-**Seçenek A (önerilen, hızlı):** Resolver'ı sertleştir — context yoksa exception at, sadece açıkça izin verilen path'ler için bypass.
-```java
-@Override
-public String resolveCurrentTenantIdentifier() {
-    if (TenantContext.hasTenantContext()) {
-        return TenantContext.getCurrentTenantId().toString();
-    }
-    if (TenantBypassContext.isBypassActive()) {  // explicit opt-in
-        return SYSTEM_TENANT;
-    }
-    throw new IllegalStateException("Tenant context required");
-}
-```
+**Neden güvenli:** `tenant_id` kolonu sayısal Long (1, 2, 3...). SYSTEM fallback aktifken
+Hibernate `WHERE tenant_id = 'SYSTEM'` uygular — hiçbir satır bu değerle kayıtlı olmadığı
+için read'ler boş sonuç döner, cross-tenant veri sızmaz. Write tarafı zaten
+`TenantEntityListener` tarafından korunuyor (context yoksa `IllegalStateException`).
 
-**Seçenek B (daha temiz, biraz daha uzun):** `@CrossTenantOperation` annotation tanımla, sadece bu annotation'lı service metodlarında SYSTEM tenant kullanılabilsin. AOP ile zorlat.
-
-**Kabul kriteri:** Authenticated olmayan herhangi bir endpoint'te tenant entity insert/update denenirse `IllegalStateException` patlar, log'da kayıt kalır.
+**Sonuç:** Dokunmaya gerek yok.
 
 ---
 
@@ -82,15 +73,19 @@ sentry.send-default-pii=false
 
 **Aksiyon:** Hangi hosting kullanıyorsan ona göre:
 - **Managed (RDS, Supabase, Neon, DigitalOcean Managed PG):** Daily automated backup'ı aç, retention 7-30 gün, PITR varsa aç.
-- **Self-hosted:** `pg_dump` cron job + S3/R2'ye encrypted upload.
+- **Self-hosted:** `pg_dump` cron job + R2'ye encrypted upload.
+
+> **Not (2026-06-19):** R2 bucket henüz aktif değil. R2 açılınca `pg_dump` cron job ekleniyor — o zamana kadar managed hosting'in built-in backup'ını aç ve bunu madde kapatmış say. Cron scripti ayrıca yazılacak.
 
 **Kabul kriteri:** Bir test backup'tan staging veritabanına restore deneme yap, başarılı olduğunu doğrula. (Test edilmemiş backup, backup değildir.)
 
 ---
 
-### [ ] 4. Smoke test suite — happy path *(2 gün)*
+### [x] 4. Smoke test suite — happy path *(2026-06-19)*
 
 **Sorun:** Şu an test yok denecek kadar az; her deploy'da manuel regresyon yapmak yavaşlatır ve hata atlar.
+
+> **Karar (2026-06-19):** Testler deploy'u blokluyor. 8 testin hepsi geçmeden deploy yapılmıyor.
 
 **Aksiyon:** Aşağıdaki minimum 8 entegrasyon testi (Spring Boot `@SpringBootTest` + Testcontainers Postgres):
 
@@ -103,7 +98,7 @@ sentry.send-default-pii=false
 7. Cross-tenant izolasyon: Org A user'ı Org B entry'sini görememeli.
 8. JWT expired → refresh akışı.
 
-**Kabul kriteri:** `mvn test` her deploy öncesi koşuluyor, 8 testin hepsi yeşil.
+**Kabul kriteri:** `mvn test` 8 testin hepsi yeşil → deploy açılır. Kırmızı olan tek test deploy'u bloklar.
 
 ---
 

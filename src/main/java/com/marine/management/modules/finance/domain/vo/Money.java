@@ -21,10 +21,11 @@ public class Money {
 
     public Money(BigDecimal amount, String currencyCode) {
         validateAmount(amount);
-        validateCurrencyCode(currencyCode);
+        String normalizedCode = currencyCode != null ? currencyCode.toUpperCase() : null;
+        validateCurrencyCode(normalizedCode);
 
         this.amount = amount.setScale(DEFAULT_SCALE, DEFAULT_ROUNDING);
-        this.currencyCode = currencyCode.toUpperCase();
+        this.currencyCode = normalizedCode;
     }
 
     // === FACTORY METHODS ===
