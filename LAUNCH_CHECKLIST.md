@@ -14,37 +14,16 @@
 
 ---
 
-## 🔴 P0 — Canlıya Çıkmadan Önce (5-7 iş günü)
+## ✅ P0 — Tamamlananlar
 
-### [ ] 1. Backend — CORS env-var'a bağla *(1 saat)*
-
-**Sorun:** `SecurityConfig.corsConfigurationSource()` içinde `localhost:4200` hard-coded. `application.properties`'teki `cors.allowed-origins` env-var hiç okunmuyor — production'da front-end CORS'tan kırılır.
-
-**Aksiyon:** `SecurityConfig.java`:
-```java
-@Value("${cors.allowed-origins}")
-private String allowedOrigins;
-
-@Bean
-public CorsConfigurationSource corsConfigurationSource() {
-    CorsConfiguration configuration = new CorsConfiguration();
-    configuration.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
-    configuration.setAllowedMethods(Arrays.asList("GET","POST","PUT","PATCH","DELETE","OPTIONS"));
-    configuration.setAllowedHeaders(List.of("*"));
-    configuration.setAllowCredentials(true);
-    configuration.setExposedHeaders(List.of("Authorization"));
-    configuration.setMaxAge(3600L);
-    UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-    source.registerCorsConfiguration("/**", configuration);
-    return source;
-}
-```
-
-**Kabul kriteri:** Production env-var olarak `CORS_ALLOWED_ORIGINS=https://app.marine-domain.com` set edip front-end'in login isteği başarılı dönüyor.
+- ~~**1. Backend — CORS env-var'a bağla**~~ → `SecurityConfig` `cors.allowed-origins` property'sini okuyor, trim + filter ile temiz. *(2026-06-10)*
+- ~~**3. Frontend — `environment.prod.ts` gerçek API URL**~~ → `https://api.maritar.com/api` set edildi. *(2026-06-18)*
 
 ---
 
-### [ ] 2. Backend — SYSTEM tenant fallback'ı kapat *(1-2 gün)*
+## 🔴 P0 — Kalan Blockerlar
+
+### [ ] 1. Backend — SYSTEM tenant fallback'ı kapat *(1-2 gün)*
 
 **Sorun:** `HibernateTenantIdentifierResolver` context yokken `"SYSTEM"` döndürüyor; `TenantEntityListener` aynı durumda `IllegalStateException` atıyor. Bu iki kontrat çelişiyor — tek bir senaryo cross-tenant veri sızıntısı riski yaratıyor.
 
@@ -70,23 +49,7 @@ public String resolveCurrentTenantIdentifier() {
 
 ---
 
-### [ ] 3. Frontend — `environment.prod.ts` gerçek API URL *(5 dakika)*
-
-**Sorun:**
-```ts
-apiUrl: 'https://REPLACE_WITH_YOUR_API_DOMAIN/api',
-```
-
-**Aksiyon:** Production backend domain'ini koy. Örneğin:
-```ts
-apiUrl: 'https://api.marine-domain.com/api',
-```
-
-**Kabul kriteri:** `ng build --configuration production` ile alınan `dist/` çıktısı içinde `localhost:8080` veya `REPLACE_WITH` string'i grep edildiğinde sıfır sonuç dönmeli.
-
----
-
-### [ ] 4. Backend — Error tracking bağla *(yarım gün)*
+### [ ] 2. Backend — Error tracking bağla *(yarım gün)*
 
 **Sorun:** Pilotun *tüm amacı* hatalardan öğrenmek. Sentry / Bugsnag / GlitchTip yoksa hatadan haberin olmaz, kullanıcı bildirmeden önce göremezsin.
 
@@ -113,7 +76,7 @@ sentry.send-default-pii=false
 
 ---
 
-### [ ] 5. PostgreSQL otomatik yedekleme *(yarım gün)*
+### [ ] 3. PostgreSQL otomatik yedekleme *(yarım gün)*
 
 **Sorun:** Pilot verisini kaybetmek hukuki ve güven sorunudur.
 
@@ -125,7 +88,7 @@ sentry.send-default-pii=false
 
 ---
 
-### [ ] 6. Smoke test suite — happy path *(2 gün)*
+### [ ] 4. Smoke test suite — happy path *(2 gün)*
 
 **Sorun:** Şu an test yok denecek kadar az; her deploy'da manuel regresyon yapmak yavaşlatır ve hata atlar.
 
@@ -262,7 +225,7 @@ Bu metrikler kod kalitesinden değil, kullanıcı davranışından konuşur — 
 
 Pilot kullanıcılar ilk login'i atmadan önce sen bunları sırasıyla doğrula:
 
-1. [ ] Production domain'inden login başarılı dönüyor (CORS ✓).
+1. [x] Production domain'inden login başarılı dönüyor (CORS ✓).
 2. [ ] Login sonrası dashboard yükleniyor.
 3. [ ] Yeni entry oluşturuldu, kaydedildi.
 4. [ ] Approval flow çalışıyor (test hesabıyla CAPTAIN onayı verildi).

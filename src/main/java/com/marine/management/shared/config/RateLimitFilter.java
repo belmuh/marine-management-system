@@ -138,8 +138,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
                     -> new RateLimitRule(authCache, AUTH_LIMIT, AUTH_WINDOW_SECONDS);
 
             case "/api/auth/register",
-                 "/api/auth/resend-verification",
-                 "/api/onboarding/register"
+                 "/api/auth/resend-verification"
                     -> new RateLimitRule(registerCache, REGISTER_LIMIT, REGISTER_WINDOW_SECONDS);
 
             default -> null;

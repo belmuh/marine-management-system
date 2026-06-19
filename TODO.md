@@ -12,18 +12,13 @@ Detaylar için DEPLOY-REVIEW.md, test adımları için TEST-CHECKLIST.md.
 
 ## Deploy Altyapısı
 
-- [ ] **Maven wrapper — commit + sürüm:** ✅ `mvn wrapper:wrapper` ile üretildi (2026-06-11, Maven 3.8.6'ya pinli). Kalan: `git add .mvn mvnw mvnw.cmd` ile commit'le. İsteğe bağlı: `mvn wrapper:wrapper -Dmaven=3.9.9` ile daha güncel sürüme pinle.
-- [ ] **Dockerfile'lar:** ✅ Backend yazıldı (multi-stage, wrapper'lı, non-root, 2026-06-11). Kalan: frontend (ng build → nginx) + lokalde `docker build .` ile doğrula.
-- [ ] **CI/CD:** ✅ `.github/workflows/ci.yml` yazıldı (build+test her push/PR'da, docker build main'de). Kalan: push'la ve ilk koşuyu izle; registry push (GHCR) deploy hedefi netleşince.
-- [ ] **`.env.example`:** Zorunlu env değişkenleri: `DATABASE_URL/USERNAME/PASSWORD`, `JWT_SECRET`, `SYSTEM_ADMIN_PASSWORD`, `CORS_ALLOWED_ORIGINS`, `R2_*`, `MAIL_*` (+`MAIL_ENABLED=true`), `APP_VERIFY_URL`, `APP_RESET_PASSWORD_URL`.
-- [ ] Backend root'a `.gitignore` ve `README` ekle.
+- [ ] **Maven wrapper — commit:** `git add .mvn mvnw mvnw.cmd` ile commit'le. İsteğe bağlı: `mvn wrapper:wrapper -Dmaven=3.9.9` ile daha güncel sürüme pinle.
+- [ ] **CI/CD:** `.github/workflows/ci.yml` yazıldı ama hiç push'lanmadı. Push'la ve ilk koşuyu izle; registry push (GHCR) deploy hedefi netleşince.
 
 ## Güvenlik (bilinçli karar gerektirir)
 
-- [ ] **Legacy `/api/onboarding/register` endpoint'ini kapat/kaldır:** Frontend artık `/auth/register` + `/setup` (v2) kullanıyor; legacy endpoint hâlâ permitAll ve referans verisini ikinci kez başlatabilir. Kaldır ya da devre dışı bırak. (Starter set seed'i tenant başına idempotent yapıldı, bu riske dayanıklı — ama TenantMainCategory/Who init'i mükerrer kayıt üretebilir.)
+- [x] **Legacy `/api/onboarding/register` endpoint'ini kapat/kaldır:** Controller'dan zaten silinmiş. `RateLimitFilter`'daki ölü referans temizlendi (2026-06-18).
 
-- [ ] **Refresh token'ları hash'le:** DB'de düz metin duruyor; SHA-256 hash sakla, lookup'ı hash ile yap. Süreyi `refresh.token.expiration` property'sine bağla (şu an `plusDays(7)` hardcoded).
-- [ ] **JWT secret uzunluk doğrulaması:** Startup'ta ≥256-bit kontrolü (`@PostConstruct`).
 - [ ] **jjwt 0.11.5 → 0.12.x** yükseltme.
 - [ ] **Swagger `permitAll` izinlerini kaldır** (springdoc projede yok, izin ölü).
 - [ ] Token'ların localStorage'da tutulması: XSS trade-off'unu belgele ya da refresh token'ı httpOnly cookie'ye taşı.
@@ -44,9 +39,18 @@ Detaylar için DEPLOY-REVIEW.md, test adımları için TEST-CHECKLIST.md.
 - [ ] **Sefer/charter etiketi:** Piyasa yazılımında kullanıcılar sefer başına kategori açıyor (anti-pattern) — gerçek ihtiyaç sefer bazlı maliyet takibi; etiket/sefer boyutu olarak değerlendir.
 - [ ] **EntryStatus'u ikiye ayırma (approvalStatus × paymentStatus):** İade/fazla ödeme senaryoları gelirse; şimdilik bilinçli teknik borç.
 
+## Mimari Borç
+
+- [ ] **TenantAwareScheduledTask — AOP dışı filter aktivasyonu** *(inceleme bekliyor)*
+  - **Sorun:** `TenantFilterAspect`, Hibernate tenantFilter'ını Spring AOP proxy zinciri üzerinden aktif eder (`@Service`, `@Transactional`). Background job lambda'sı içinde doğrudan JpaRepository çağrısı yapılırsa AOP proxy atlanır → `@Filter` aktif olmaz → cross-tenant veri sızıntısı riski.
+  - **Şu an güvende:** Hiçbir sınıf `TenantAwareScheduledTask`'ı extend etmiyor. Risk latent (gelecek geliştirici tuzağı).
+  - **Kısa vadeli aksiyonlar (yapıldı):** Javadoc'ta ❌/✅ örneklerle uyarı eklendi. `@Service` delegasyonu zorunlu olarak belgelendi.
+  - **Değerlendirilecek mimari seçenek:** `executeForAllTenants` içinde `entityManager.unwrap(Session.class).enableFilter(...)` explicit çağrısı ekle — AOP'tan bağımsız, lambda içi kodun ne yaptığından bağımsız olarak filtre garantili aktif olur.
+  - **Soru:** Scheduled task gelmeden önce: AOP pointcut'ını genişlet mi (`@Scheduled` ekle?), yoksa executeForAllTenants'ı session-aware mı yap? İkisinin trade-off'unu incele.
+
 ## Kalite / Performans
 
-- [ ] **`User.getAuthorities()` içindeki debug `System.out.println`'leri kaldır** — her istekte kullanıcının tüm izinlerini stdout'a basıyor (bilgi sızıntısı + gürültü).
+- [x] **`User.getAuthorities()` debug `System.out.println`'leri** — zaten silinmiş, temiz.
 - [ ] **Tenant izolasyon integration testi** (multi-tenant SaaS için en kritik eksik test).
 - [ ] Auth akışı testleri (login/refresh/verify/reset).
 - [ ] Frontend'teki 64 `console.log`'u LoggerService arkasına al ya da prod build'de strip et.
@@ -56,6 +60,14 @@ Detaylar için DEPLOY-REVIEW.md, test adımları için TEST-CHECKLIST.md.
 - [ ] `spring.flyway.baseline-on-migrate=true` gerçekten gerekli mi gözden geçir.
 
 ---
+
+## ✔ Tamamlananlar (2026-06-18)
+
+- [x] **Refresh token'ları hash'le** — SHA-256 hash DB'ye yazılıyor, lookup hash ile yapılıyor. `refresh.token.expiration` property'sine bağlı.
+- [x] **JWT secret uzunluk doğrulaması** — `@PostConstruct` ile ≥32 karakter (256-bit) kontrolü mevcut, kısa secret'ta uygulama başlamıyor.
+- [x] **Frontend Dockerfile** — ng build → nginx multi-stage yazıldı.
+- [x] **`environment.prod.ts` gerçek API URL** — `https://api.maritar.com/api` set edildi.
+- [x] **`.env.example` + `.gitignore`** — her ikisi de mevcut, tüm zorunlu env değişkenleri belgelenmiş.
 
 ## ✔ Tamamlananlar (2026-06-11)
 
