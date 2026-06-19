@@ -4,6 +4,7 @@ import com.marine.management.modules.finance.domain.exceptions.EntryValidationEx
 import com.marine.management.modules.finance.domain.exceptions.UnauthorizedActionException;
 import com.marine.management.shared.exceptions.*;
 import com.marine.management.shared.presentation.ErrorResponse;
+import io.sentry.Sentry;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -161,6 +162,12 @@ public class GlobalExceptionHandler {
             HttpServletRequest request) {
         String errorId = UUID.randomUUID().toString();
         logger.error("Unexpected error [ID: {}] at {}: {}", errorId, request.getRequestURI(), ex.getMessage(), ex);
+
+        Sentry.withScope(scope -> {
+            scope.setTag("errorId", errorId);
+            scope.setTag("path", request.getRequestURI());
+            Sentry.captureException(ex);
+        });
 
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ErrorResponse(
