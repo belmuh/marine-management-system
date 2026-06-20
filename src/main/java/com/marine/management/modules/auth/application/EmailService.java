@@ -2,6 +2,7 @@ package com.marine.management.modules.auth.application;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -36,7 +37,7 @@ public class EmailService {
     @Value("${app.mail.enabled:false}")
     private boolean mailEnabled;
 
-    public EmailService(JavaMailSender mailSender) {
+    public EmailService(@Autowired(required = false) JavaMailSender mailSender) {
         this.mailSender = mailSender;
     }
 
@@ -51,7 +52,7 @@ public class EmailService {
         String subject = "Verify your email - Marine Management";
         String htmlContent = buildVerificationEmailHtml(firstName, verifyUrl);
 
-        if (!mailEnabled) {
+        if (!mailEnabled || mailSender == null) {
             logger.info("========================================");
             logger.info("EMAIL VERIFICATION (mail disabled - dev mode)");
             logger.info("To: {}", toEmail);
@@ -92,7 +93,7 @@ public class EmailService {
         String subject = "Reset your password - Marine Management";
         String htmlContent = buildPasswordResetEmailHtml(firstName, resetUrl);
 
-        if (!mailEnabled) {
+        if (!mailEnabled || mailSender == null) {
             logger.info("========================================");
             logger.info("PASSWORD RESET EMAIL (mail disabled - dev mode)");
             logger.info("To: {}", toEmail);
