@@ -47,8 +47,8 @@ public class DemoDataInitializer implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(DemoDataInitializer.class);
 
-    private static final String DEMO_ORG_NAME = "DEMO-YACHT";
-    private static final String DEMO_ADMIN_EMAIL = "admin@demo.com";
+    private static final String DEMO_ORG_NAME = "S/Y Maritar";
+    private static final String DEMO_ADMIN_EMAIL = "admin@maritar.demo";
     private static final String DEMO_PASSWORD = "Demo123!";
 
     private final OrganizationRepository organizationRepository;
@@ -62,12 +62,12 @@ public class DemoDataInitializer implements CommandLineRunner {
 
     private final Random random = new Random();
 
-    private static final String[] EXPENSE_VENDORS = {"Shell Marina", "Migros", "Teknosa", "Marina Market",
-            "Marmaris Diesel", "Bodrum Ship Supply", "Turgutreis Tekne", "Fethiye Marina",
-            "Göcek Provisions", "Yalıkavak Port"};
-    private static final String[] INCOME_VENDORS = {"Charter Client A", "Charter Client B", "Yacht Show Prize",
-            "Insurance Refund", "Equipment Resale", "Marina Sublease"};
-    private static final String[] CITIES = {"Istanbul", "Marmaris", "Bodrum", "Fethiye", "Göcek", "Antalya"};
+    private static final String[] EXPENSE_VENDORS = {"Shell Marina Marmaris", "Migros", "Marina Market Bodrum",
+            "Marmaris Diesel", "Bodrum Ship Supply", "Turgutreis Tekne Bakım", "Fethiye Marina",
+            "Göcek Provisions", "Yalıkavak Port", "Intercontinental Ship Stores"};
+    private static final String[] INCOME_VENDORS = {"Oceanview Charters GmbH", "Blue Voyage S.A.",
+            "Mediterranean Sailing Club", "Adriatic Dream Ltd.", "Aegean Escapes Ltd.", "Portofino Yacht Rentals"};
+    private static final String[] CITIES = {"İstanbul", "Marmaris", "Bodrum", "Fethiye", "Göcek", "Antalya"};
     private static final String[] COUNTRIES = {"Turkey", "Greece", "Croatia", "Italy"};
 
     public DemoDataInitializer(
@@ -112,6 +112,7 @@ public class DemoDataInitializer implements CommandLineRunner {
                     "EUR"
             );
             organization.completeOnboarding(); // Demo org için onboarding tamamlandı sayılır
+            organization.enableManagerApproval(new BigDecimal("500.00")); // 500 EUR üstü manager onayına gider
             organization = organizationRepository.save(organization);
             Long tenantId = organization.getOrganizationId();
 
@@ -127,8 +128,8 @@ public class DemoDataInitializer implements CommandLineRunner {
             // ============================================
             User admin = User.createWithHashedPassword(
                     DEMO_ADMIN_EMAIL,
-                    "Demo",
-                    "Admin",
+                    "James",
+                    "Harrison",
                     passwordEncoder.encode(DEMO_PASSWORD),
                     Role.ADMIN,
                     organization
@@ -190,11 +191,11 @@ public class DemoDataInitializer implements CommandLineRunner {
 
             log.info("🎉 Demo data initialization completed!");
             log.info("👥 Demo Users (password: {})", DEMO_PASSWORD);
-            log.info("   - {} (ADMIN)", DEMO_ADMIN_EMAIL);
-            log.info("   - captain@demo.com (CAPTAIN)");
-            log.info("   - manager@demo.com (MANAGER)");
-            log.info("   - crew1@demo.com (CREW)");
-            log.info("   - crew2@demo.com (CREW)");
+            log.info("   - {} (ADMIN / James Harrison)", DEMO_ADMIN_EMAIL);
+            log.info("   - captain@maritar.demo (CAPTAIN / Luca Romano)");
+            log.info("   - manager@maritar.demo (MANAGER / Claire Dubois)");
+            log.info("   - crew1@maritar.demo (CREW / Marco Rossi)");
+            log.info("   - crew2@maritar.demo (CREW / Sophie Martin)");
 
         } catch (Exception e) {
             log.error("❌ Demo data initialization failed", e);
@@ -208,10 +209,10 @@ public class DemoDataInitializer implements CommandLineRunner {
 
     private List<User> createDemoUsers(Organization organization) {
         List<User> users = new ArrayList<>();
-        users.add(createUser("captain@demo.com", "Demo", "Captain", Role.CAPTAIN, organization));
-        users.add(createUser("manager@demo.com", "Demo", "Manager", Role.MANAGER, organization));
-        users.add(createUser("crew1@demo.com", "John", "Crew", Role.CREW, organization));
-        users.add(createUser("crew2@demo.com", "Jane", "Crew", Role.CREW, organization));
+        users.add(createUser("captain@maritar.demo", "Luca", "Romano", Role.CAPTAIN, organization));
+        users.add(createUser("manager@maritar.demo", "Claire", "Dubois", Role.MANAGER, organization));
+        users.add(createUser("crew1@maritar.demo", "Marco", "Rossi", Role.CREW, organization));
+        users.add(createUser("crew2@maritar.demo", "Sophie", "Martin", Role.CREW, organization));
         return users;
     }
 
@@ -285,11 +286,20 @@ public class DemoDataInitializer implements CommandLineRunner {
                     expenseCategories, whoSelections, mainCategories, recentDate(today)));
         }
 
-        // 3 kaptan onayı bekleyen
-        for (int i = 0; i < 3; i++) {
+        // 2 kaptan onayı bekleyen
+        for (int i = 0; i < 2; i++) {
             FinancialEntry entry = createDemoExpense(
                     expenseCategories, whoSelections, mainCategories, recentDate(today));
             entry.submit();
+            entryRepository.save(entry);
+        }
+
+        // 2 manager onayı bekleyen (captain onayladı, 500 EUR üstü olduğu için manager'a düştü)
+        for (int i = 0; i < 2; i++) {
+            FinancialEntry entry = createLargeExpense(
+                    expenseCategories, whoSelections, mainCategories, recentDate(today));
+            entry.submit();                        // DRAFT → PENDING_CAPTAIN
+            entry.approveByCaptain(true);          // PENDING_CAPTAIN → PENDING_MANAGER
             entryRepository.save(entry);
         }
 
@@ -363,7 +373,39 @@ public class DemoDataInitializer implements CommandLineRunner {
                 Money.of(formatAmount(amount), "EUR"),
                 entryDate,
                 randomPaymentMethod(),
-                "Demo expense - " + vendor,
+                vendor,
+                who,
+                mainCategory,
+                vendor,
+                COUNTRIES[random.nextInt(COUNTRIES.length)],
+                CITIES[random.nextInt(CITIES.length)],
+                null,
+                vendor,
+                "EUR"
+        );
+    }
+
+    /** Manager onay akışını göstermek için 500 EUR limitin üstünde (800–3000 EUR) gider kaydı. */
+    private FinancialEntry createLargeExpense(
+            List<FinancialCategory> categories,
+            List<TenantWhoSelection> whoSelections,
+            List<TenantMainCategory> mainCategories,
+            LocalDate entryDate
+    ) {
+        double amount = 800 + random.nextDouble() * 2200; // 800–3000 EUR (kesinlikle > 500)
+        FinancialCategory category = categories.get(random.nextInt(categories.size()));
+        TenantMainCategory mainCategory = resolveMainCategory(category, null, mainCategories);
+        TenantWhoSelection who = resolveWho(mainCategory, whoSelections);
+        String vendor = EXPENSE_VENDORS[random.nextInt(EXPENSE_VENDORS.length)];
+
+        return FinancialEntry.create(
+                nextEntryNumber(),
+                RecordType.EXPENSE,
+                category,
+                Money.of(formatAmount(amount), "EUR"),
+                entryDate,
+                randomPaymentMethod(),
+                vendor,
                 who,
                 mainCategory,
                 vendor,
@@ -386,7 +428,7 @@ public class DemoDataInitializer implements CommandLineRunner {
                 Money.of(formatAmount(amount), "EUR"),
                 entryDate,
                 random.nextBoolean() ? PaymentMethod.BANK_TRANSFER : PaymentMethod.CASH,
-                "Income - " + vendor,
+                vendor,
                 null,
                 null,
                 vendor,
@@ -475,7 +517,7 @@ public class DemoDataInitializer implements CommandLineRunner {
                 entry.getEntryDate().plusDays(random.nextInt(6)),
                 null,
                 randomPaymentMethod(),
-                "Demo payment",
+                null,
                 recordedBy
         );
         entry.addPayment(payment);
@@ -491,7 +533,7 @@ public class DemoDataInitializer implements CommandLineRunner {
                 entry.getEntryDate().plusDays(random.nextInt(6)),
                 null,
                 randomPaymentMethod(),
-                "Demo partial payment",
+                null,
                 recordedBy
         );
         entry.addPayment(payment);

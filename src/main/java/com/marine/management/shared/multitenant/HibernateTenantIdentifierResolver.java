@@ -37,6 +37,12 @@ public class HibernateTenantIdentifierResolver implements CurrentTenantIdentifie
     @Override
     public String resolveCurrentTenantIdentifier() {
         if (!TenantContext.hasTenantContext()) {
+            // SYSTEM fallback kasıtlı bir tasarım kararıdır — bug değil.
+            // Spring Security init ve /api/auth/** endpoint'lerinde (login, refresh)
+            // henüz tenant set edilmemiş olabilir. Bu durumda Hibernate
+            // WHERE tenant_id = 'SYSTEM' uygular; hiçbir satır bu değerle
+            // kayıtlı olmadığından read'ler boş döner, cross-tenant sızıntı olmaz.
+            // Write koruması TenantEntityListener tarafından sağlanıyor.
             log.trace("No tenant context, using SYSTEM tenant for background operation");
             return SYSTEM_TENANT;
         }

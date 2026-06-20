@@ -44,26 +44,49 @@ için read'ler boş sonuç döner, cross-tenant veri sızmaz. Write tarafı zate
 
 **Sorun:** Pilotun *tüm amacı* hatalardan öğrenmek. Sentry / Bugsnag / GlitchTip yoksa hatadan haberin olmaz, kullanıcı bildirmeden önce göremezsin.
 
-**Aksiyon (Sentry örneği):**
-```xml
-<!-- pom.xml -->
-<dependency>
-    <groupId>io.sentry</groupId>
-    <artifactId>sentry-spring-boot-starter-jakarta</artifactId>
-    <version>7.14.0</version>
-</dependency>
-```
-```properties
-# application-prod.properties
-sentry.dsn=${SENTRY_DSN}
-sentry.environment=production
-sentry.traces-sample-rate=0.1
-sentry.send-default-pii=false
-```
-- `GlobalExceptionHandler`'daki `errorId` Sentry tag'i olarak gönderilsin (`Sentry.setTag("errorId", errorId)`).
-- Frontend tarafında da `@sentry/angular` ile error.interceptor'dan event gönder.
+> **Durum (2026-06-19):** Backend tamamen hazır, sadece `SENTRY_DSN` env variable eksik.
+> Frontend (`@sentry/angular`) henüz yapılmadı — devam noktası aşağıda.
 
-**Kabul kriteri:** Bilerek bir 500 hatası tetiklediğinde Sentry dashboard'da event görünüyor + frontend'in attığı errorId backend'inkiyle eşleşiyor.
+**Backend — TAMAMLANDI ✅**
+- `pom.xml`: `sentry-spring-boot-starter-jakarta` dependency mevcut
+- `application-prod.properties`: `sentry.dsn=${SENTRY_DSN}`, `sentry.environment=production`, `sentry.traces-sample-rate=0.1` mevcut
+- `GlobalExceptionHandler`: 500 hataları `Sentry.withScope()` + `Sentry.captureException()` ile gönderiliyor, `errorId` tag olarak ekleniyor
+- **Tek eksik:** Production sunucusunda `SENTRY_DSN` env variable set edilmeli
+
+**Frontend — YAPILACAK**
+
+Adım 1 — Paketi kur:
+```bash
+npm install @sentry/angular
+```
+
+Adım 2 — `environment.prod.ts`'e DSN ekle, `environment.ts`'e boş string:
+```typescript
+sentryDsn: 'https://xxx@oXXX.ingest.sentry.io/XXX',  // prod
+sentryDsn: '',  // dev
+```
+
+Adım 3 — `main.ts`'e Sentry init ekle (bootstrapApplication'dan önce):
+```typescript
+import * as Sentry from '@sentry/angular';
+if (environment.production && environment.sentryDsn) {
+  Sentry.init({ dsn: environment.sentryDsn, environment: 'production', tracesSampleRate: 0.1 });
+}
+```
+
+Adım 4 — `error.interceptor.ts`'e Sentry ekle (status >= 500 hatalarında):
+```typescript
+import * as Sentry from '@sentry/angular';
+// catchError içinde:
+if (httpError.status >= 500) {
+  Sentry.withScope(scope => {
+    if (httpError.error?.errorId) scope.setTag('errorId', httpError.error.errorId);
+    Sentry.captureException(new Error(errorMessage));
+  });
+}
+```
+
+**Kabul kriteri:** Bilerek bir 500 hatası tetiklediğinde Sentry dashboard'da event görünüyor + frontend'in attığı `errorId` backend'inkiyle eşleşiyor.
 
 ---
 
