@@ -2,7 +2,7 @@ package com.marine.management.modules.auth.application;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -12,9 +12,13 @@ import org.springframework.stereotype.Service;
  *
  * Logs what would have been sent so developers can copy verification/reset links
  * from the console without needing a real mail server.
+ *
+ * Uses an explicit @ConditionalOnProperty (inverse of SmtpEmailService) instead of
+ * @ConditionalOnMissingBean to avoid bean-ordering issues that cause
+ * NoSuchBeanDefinitionException during Spring Boot test context startup.
  */
 @Service
-@ConditionalOnMissingBean(EmailService.class)
+@ConditionalOnProperty(name = "app.mail.enabled", havingValue = "false", matchIfMissing = true)
 public class NoOpEmailService implements EmailService {
 
     private static final Logger logger = LoggerFactory.getLogger(NoOpEmailService.class);
