@@ -108,7 +108,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     /**
-     * Skip rate limiting for non-API paths (static assets, actuator, Swagger).
+     * Skip rate limiting for non-API paths (static assets, actuator).
      * Avoids unnecessary cache lookups for every request.
      */
     @Override
