@@ -82,5 +82,6 @@ jobs:
             done
           echo "Temizlik tamamlandı."
 
-      - name: Başarı özeti
-        run: echo "Backup tamamlandi: $BACKUP_FILE - sonraki calisma: yarin 02:00 UTC"
+      - name: Basari ozeti
+        run: |
+          echo "Backup tamamlandi: $BACKUP_FILE - sonraki calisma: yarin 02:00 UTC"
