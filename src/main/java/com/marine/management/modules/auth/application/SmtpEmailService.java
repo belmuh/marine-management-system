@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
+import org.springframework.mail.MailException;
 
 /**
  * SMTP implementation of EmailService — active only when app.mail.enabled=true.
@@ -25,18 +26,19 @@ public class SmtpEmailService implements EmailService {
     private static final Logger logger = LoggerFactory.getLogger(SmtpEmailService.class);
 
     private final JavaMailSender mailSender;
+    private final String fromAddress;
+    private final String verifyBaseUrl;
+    private final String resetPasswordBaseUrl;
 
-    @Value("${app.mail.from}")
-    private String fromAddress;
-
-    @Value("${app.mail.verify-url}")
-    private String verifyBaseUrl;
-
-    @Value("${app.mail.reset-password-url}")
-    private String resetPasswordBaseUrl;
-
-    public SmtpEmailService(JavaMailSender mailSender) {
+    public SmtpEmailService(
+            JavaMailSender mailSender,
+            @Value("${app.mail.from}") String fromAddress,
+            @Value("${app.mail.verify-url}") String verifyBaseUrl,
+            @Value("${app.mail.reset-password-url}") String resetPasswordBaseUrl) {
         this.mailSender = mailSender;
+        this.fromAddress = fromAddress;
+        this.verifyBaseUrl = verifyBaseUrl;
+        this.resetPasswordBaseUrl = resetPasswordBaseUrl;
     }
 
     @Override
@@ -57,7 +59,7 @@ public class SmtpEmailService implements EmailService {
 
             mailSender.send(message);
             logger.info("Verification email sent to: {}", toEmail);
-        } catch (MessagingException e) {
+        } catch (MessagingException | MailException e) {
             logger.error("Failed to send verification email to: {}", toEmail, e);
             // Don't throw — registration should still succeed even if email fails
         }
@@ -81,7 +83,7 @@ public class SmtpEmailService implements EmailService {
 
             mailSender.send(message);
             logger.info("Password reset email sent to: {}", toEmail);
-        } catch (MessagingException e) {
+        } catch (MessagingException | MailException e) {
             logger.error("Failed to send password reset email to: {}", toEmail, e);
         }
     }
