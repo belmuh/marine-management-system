@@ -7,11 +7,13 @@ import com.marine.management.modules.finance.domain.entities.TenantMainCategory;
 import com.marine.management.modules.finance.domain.entities.TenantWhoSelection;
 import com.marine.management.modules.finance.domain.vo.EntryNumber;
 import com.marine.management.modules.finance.infrastructure.FinancialCategoryRepository;
-import com.marine.management.modules.finance.infrastructure.FinancialEntryRepository;
+import com.marine.management.modules.finance.infrastructure.TenantEntryCounterRepository;
 import com.marine.management.modules.finance.infrastructure.TenantMainCategoryRepository;
 import com.marine.management.modules.finance.infrastructure.TenantWhoSelectionRepository;
+import com.marine.management.shared.multitenant.TenantContext;
 import org.springframework.stereotype.Component;
 
+import java.time.Year;
 import java.util.UUID;
 import java.util.Objects;
 
@@ -30,20 +32,20 @@ import java.util.Objects;
 @Component
 public class FinancialEntryFactory {
 
-    private final FinancialEntryRepository entryRepository;
+    private final TenantEntryCounterRepository entryCounterRepository;
     private final FinancialCategoryRepository categoryRepository;
     private final TenantWhoSelectionRepository tenantWhoRepository;
     private final TenantMainCategoryRepository tenantMainCategoryRepository;
     private final TenantBaseCurrencyProvider tenantBaseCurrencyProvider;
 
     public FinancialEntryFactory(
-            FinancialEntryRepository entryRepository,
+            TenantEntryCounterRepository entryCounterRepository,
             FinancialCategoryRepository categoryRepository,
             TenantWhoSelectionRepository tenantWhoRepository,
             TenantMainCategoryRepository tenantMainCategoryRepository,
             TenantBaseCurrencyProvider tenantBaseCurrencyProvider
     ) {
-        this.entryRepository = entryRepository;
+        this.entryCounterRepository = entryCounterRepository;
         this.categoryRepository = categoryRepository;
         this.tenantWhoRepository = tenantWhoRepository;
         this.tenantMainCategoryRepository = tenantMainCategoryRepository;
@@ -126,12 +128,15 @@ public class FinancialEntryFactory {
     }
 
     /**
-     * Generates next entry number for current tenant.
+     * Mevcut tenant ve yıl için bir sonraki entry numarasını üretir.
      *
-     * TENANT ISOLATION: Sequence is tenant-scoped (auto-filtered).
+     * TenantContext her authenticated request'te TenantFilter tarafından
+     * set edilir — burada null gelmesi mümkün değil.
      */
     private EntryNumber generateEntryNumber() {
-        int sequence = entryRepository.getNextSequence();
+        Long tenantId = TenantContext.getCurrentTenantId();
+        int year = Year.now().getValue();
+        int sequence = entryCounterRepository.nextSequence(tenantId, year);
         return EntryNumber.generate(sequence);
     }
 }

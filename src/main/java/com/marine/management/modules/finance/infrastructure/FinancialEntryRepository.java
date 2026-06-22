@@ -25,11 +25,8 @@ public interface FinancialEntryRepository
         JpaSpecificationExecutor<FinancialEntry> {  // 👈 NEW: Specification support
 
     // ============================================
-    // SEQUENCE & UNIQUE CHECKS
+    // UNIQUE CHECKS
     // ============================================
-
-    @Query(value = "SELECT NEXTVAL('financial_entry_seq')", nativeQuery = true)
-    int getNextSequence();
 
     Optional<FinancialEntry> findByEntryNumber_Value(String value);
 

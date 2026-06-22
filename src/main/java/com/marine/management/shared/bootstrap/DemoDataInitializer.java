@@ -7,6 +7,7 @@ import com.marine.management.modules.finance.domain.enums.*;
 import com.marine.management.modules.finance.domain.vo.EntryNumber;
 import com.marine.management.modules.finance.domain.vo.Money;
 import com.marine.management.modules.finance.infrastructure.*;
+import com.marine.management.modules.finance.infrastructure.TenantEntryCounterRepository;
 import com.marine.management.modules.organization.domain.Organization;
 import com.marine.management.modules.organization.infrastructure.OrganizationRepository;
 import com.marine.management.modules.users.domain.User;
@@ -58,7 +59,7 @@ public class DemoDataInitializer implements CommandLineRunner {
     private final TenantMainCategoryRepository mainCategoryRepository;
     private final TenantWhoSelectionRepository tenantWhoRepository;
     private final FinancialCategoryRepository financialCategoryRepository;
-    private final FinancialEntryRepository entryRepository;
+    private final TenantEntryCounterRepository entryCounterRepository;
 
     private final Random random = new Random();
 
@@ -78,7 +79,7 @@ public class DemoDataInitializer implements CommandLineRunner {
             TenantMainCategoryRepository mainCategoryRepository,
             TenantWhoSelectionRepository tenantWhoRepository,
             FinancialCategoryRepository financialCategoryRepository,
-            FinancialEntryRepository entryRepository
+            TenantEntryCounterRepository entryCounterRepository
     ) {
         this.organizationRepository = organizationRepository;
         this.userRepository = userRepository;
@@ -87,7 +88,7 @@ public class DemoDataInitializer implements CommandLineRunner {
         this.mainCategoryRepository = mainCategoryRepository;
         this.tenantWhoRepository = tenantWhoRepository;
         this.financialCategoryRepository = financialCategoryRepository;
-        this.entryRepository = entryRepository;
+        this.entryCounterRepository = entryCounterRepository;
     }
 
     @Override
@@ -539,9 +540,11 @@ public class DemoDataInitializer implements CommandLineRunner {
         entry.addPayment(payment);
     }
 
-    /** DB sequence'tan numara üretir (W1: bellekteki sayaç sonradan girilen kayıtlarla çakışıyordu). */
+    /** Tenant bazlı sayaçtan numara üretir — TenantContext demo init sırasında set edilmiş olmalı. */
     private EntryNumber nextEntryNumber() {
-        return EntryNumber.generate(entryRepository.getNextSequence());
+        Long tenantId = TenantContext.getCurrentTenantId();
+        int year = java.time.Year.now().getValue();
+        return EntryNumber.generate(entryCounterRepository.nextSequence(tenantId, year));
     }
 
     /** Locale'den bağımsız tutar formatı — TR locale'de "%.2f" virgül üretir ve Money parse'ı bozulur. */

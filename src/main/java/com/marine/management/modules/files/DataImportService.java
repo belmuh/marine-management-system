@@ -10,7 +10,9 @@ import com.marine.management.modules.finance.domain.vo.EntryNumber;
 import com.marine.management.modules.finance.domain.vo.Money;
 import com.marine.management.modules.finance.infrastructure.FinancialCategoryRepository;
 import com.marine.management.modules.finance.infrastructure.FinancialEntryRepository;
+import com.marine.management.modules.finance.infrastructure.TenantEntryCounterRepository;
 import com.marine.management.modules.users.domain.User;
+import com.marine.management.shared.multitenant.TenantContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -48,6 +50,7 @@ public class DataImportService {
     private final ExcelParserService excelParserService;
     private final FinancialCategoryRepository categoryRepository;
     private final FinancialEntryRepository entryRepository;
+    private final TenantEntryCounterRepository entryCounterRepository;
     private final TenantBaseCurrencyProvider tenantBaseCurrencyProvider;
     private final CategoryTypeDeterminer categoryTypeDeterminer;
 
@@ -55,11 +58,13 @@ public class DataImportService {
             ExcelParserService excelParserService,
             FinancialCategoryRepository categoryRepository,
             FinancialEntryRepository entryRepository,
+            TenantEntryCounterRepository entryCounterRepository,
             TenantBaseCurrencyProvider tenantBaseCurrencyProvider
     ) {
         this.excelParserService = excelParserService;
         this.categoryRepository = categoryRepository;
         this.entryRepository = entryRepository;
+        this.entryCounterRepository = entryCounterRepository;
         this.tenantBaseCurrencyProvider = tenantBaseCurrencyProvider;
         this.categoryTypeDeterminer = new CategoryTypeDeterminer();
     }
@@ -126,13 +131,13 @@ public class DataImportService {
             User currentUser,
             ImportResultDto.Builder resultBuilder
     ) {
-        // Her satır için DB sequence'tan taze değer alınır (NEXTVAL atomiktir).
-        // Önceki yaklaşım tek NEXTVAL çekip numarayı bellekte ++ ile artırıyordu:
-        // DB sequence yalnızca 1 ilerlediği için import sonrası manuel kayıtlar
-        // aynı numaraları alıyordu (duplicate çakışması).
         String baseCurrency = tenantBaseCurrencyProvider.getCurrentTenantBaseCurrency();
+        Long tenantId = TenantContext.getCurrentTenantId();
+        int year = java.time.Year.now().getValue();
         EntryCreator entryCreator = new EntryCreator(
-                categoryMap, currentUser, entryRepository::getNextSequence, baseCurrency);
+                categoryMap, currentUser,
+                () -> entryCounterRepository.nextSequence(tenantId, year),
+                baseCurrency);
 
         int successCount = 0;
 

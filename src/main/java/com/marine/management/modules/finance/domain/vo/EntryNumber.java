@@ -8,7 +8,7 @@ import java.util.Objects;
 @Embeddable
 public class EntryNumber {
 
-    private static final String PATTERN = "^FE-\\d{4}-\\d{3}$";
+    private static final String PATTERN = "^FE-\\d{4}-\\d{4}$";
 
     private String value;
 
@@ -17,7 +17,7 @@ public class EntryNumber {
     private EntryNumber(String value) {
         if (value == null || !value.matches(PATTERN)){
             throw new IllegalArgumentException(
-                    "Entry number must match pattern: FE-YYYY-NNN"
+                    "Entry number must match pattern: FE-YYYY-NNNN"
             );
         }
         this.value = value;
@@ -27,9 +27,9 @@ public class EntryNumber {
         return new EntryNumber(value);
     }
 
-    public static  EntryNumber generate(int sequenceNumber) {
+    public static EntryNumber generate(int sequenceNumber) {
         int year = Year.now().getValue();
-        String formatted = String.format("FE-%04d-%03d", year, sequenceNumber);
+        String formatted = String.format("FE-%04d-%04d", year, sequenceNumber);
         return new EntryNumber(formatted);
     }
 
