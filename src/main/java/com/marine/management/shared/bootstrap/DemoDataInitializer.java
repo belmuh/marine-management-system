@@ -59,6 +59,7 @@ public class DemoDataInitializer implements CommandLineRunner {
     private final TenantMainCategoryRepository mainCategoryRepository;
     private final TenantWhoSelectionRepository tenantWhoRepository;
     private final FinancialCategoryRepository financialCategoryRepository;
+    private final FinancialEntryRepository entryRepository;
     private final TenantEntryCounterRepository entryCounterRepository;
 
     private final Random random = new Random();
@@ -79,6 +80,7 @@ public class DemoDataInitializer implements CommandLineRunner {
             TenantMainCategoryRepository mainCategoryRepository,
             TenantWhoSelectionRepository tenantWhoRepository,
             FinancialCategoryRepository financialCategoryRepository,
+            FinancialEntryRepository entryRepository,
             TenantEntryCounterRepository entryCounterRepository
     ) {
         this.organizationRepository = organizationRepository;
@@ -88,6 +90,7 @@ public class DemoDataInitializer implements CommandLineRunner {
         this.mainCategoryRepository = mainCategoryRepository;
         this.tenantWhoRepository = tenantWhoRepository;
         this.financialCategoryRepository = financialCategoryRepository;
+        this.entryRepository = entryRepository;
         this.entryCounterRepository = entryCounterRepository;
     }
 
