@@ -5,6 +5,8 @@ import com.marine.management.modules.organization.application.commands.Onboardin
 import com.marine.management.modules.organization.application.commands.RegisterYachtCommand;
 import com.marine.management.modules.organization.domain.YachtType;
 import com.marine.management.modules.organization.infrastructure.OrganizationRepository;
+import com.marine.management.modules.users.infrastructure.UserRepository;
+import com.marine.management.shared.security.Role;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,52 +41,64 @@ public class SystemAdminInitializer {
     @Bean
     public CommandLineRunner initializeSystemAdmin(
             OrganizationRepository organizationRepository,
-            OrganizationOnboardingService onboardingService
+            OrganizationOnboardingService onboardingService,
+            UserRepository userRepository
     ) {
         return args -> {
             try {
                 log.info("Starting SYSTEM bootstrap...");
 
-                // Fail-fast: env var'lar set edilmemişse başlatma
                 if (adminPassword == null || adminPassword.isBlank()) {
                     throw new IllegalStateException(
-                        "SYSTEM_ADMIN_PASSWORD env var is not set. " +
-                        "Set a strong password before starting the application."
-                    );
+                        "SYSTEM_ADMIN_PASSWORD env var is not set.");
                 }
                 if (adminEmail == null || adminEmail.isBlank()) {
                     throw new IllegalStateException(
-                        "SYSTEM_ADMIN_EMAIL env var is not set."
-                    );
+                        "SYSTEM_ADMIN_EMAIL env var is not set.");
                 }
 
                 if (organizationRepository.existsByYachtName(systemOrgCode)) {
+                    // Mevcut kullanıcının rolü SUPER_ADMIN değilse yükselt
+                    userRepository.findByEmail(adminEmail).ifPresent(user -> {
+                        if (!user.getRoleEnum().isSuperAdmin()) {
+                            user.changeRole(Role.SUPER_ADMIN);
+                            userRepository.save(user);
+                            log.info("SYSTEM admin role SUPER_ADMIN'e yükseltildi: {}", adminEmail);
+                        }
+                    });
                     log.info("SYSTEM organization already exists, skipping initialization");
                     return;
                 }
 
                 RegisterYachtCommand command = new RegisterYachtCommand(
-                        systemOrgCode,          // yachtName
-                        YachtType.OTHER,        // yachtType (system org)
-                        null,                   // yachtLength
-                        systemOrgCountry,       // flagCountry
-                        null,                   // homeMarina
-                        systemOrgName,          // companyName
-                        adminEmail,             // email
-                        adminPassword,          // password
-                        "System",               // firstName
-                        "Administrator",        // lastName
-                        null,                   // phoneNumber
-                        "EUR",                  // baseCurrency
-                        "Europe/Istanbul",      // timezone
-                        1,                      // financialYearStartMonth
-                        null,                   // approvalLimit
-                        false,                  // managerApprovalEnabled
-                        null,                   // selectedMainCategoryIds (null = enable all)
-                        null                    // selectedWhoIds (null = enable all)
+                        systemOrgCode,
+                        YachtType.OTHER,
+                        null,
+                        systemOrgCountry,
+                        null,
+                        systemOrgName,
+                        adminEmail,
+                        adminPassword,
+                        "System",
+                        "Administrator",
+                        null,
+                        "EUR",
+                        "Europe/Istanbul",
+                        1,
+                        null,
+                        false,
+                        null,
+                        null
                 );
 
                 OnboardingResult result = onboardingService.registerYacht(command);
+
+                // Onboarding CAPTAIN rolüyle oluşturur — SUPER_ADMIN'e yükselt
+                userRepository.findByEmail(adminEmail).ifPresent(user -> {
+                    user.changeRole(Role.SUPER_ADMIN);
+                    userRepository.save(user);
+                    log.info("SYSTEM admin SUPER_ADMIN rolüne atandı: {}", adminEmail);
+                });
 
                 log.info("SYSTEM bootstrap completed successfully");
                 log.info("   Organization: {} (ID: {})", systemOrgCode, result.organizationId());

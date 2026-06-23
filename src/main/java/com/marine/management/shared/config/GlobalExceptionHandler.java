@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -153,6 +154,20 @@ public class GlobalExceptionHandler {
                         ex.getMessage(),           // message
                         "USER_UPDATE_ERROR",       // code
                         errorId                    // errorId
+                ));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(
+            AccessDeniedException ex,
+            HttpServletRequest request) {
+        logger.warn("Access denied at {}: {}", request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ErrorResponse(
+                        "Forbidden",
+                        "Bu işlem için yetkiniz yok",
+                        "ACCESS_DENIED",
+                        UUID.randomUUID().toString()
                 ));
     }
 
