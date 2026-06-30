@@ -31,9 +31,6 @@ jobs:
           name: test-reports
           path: target/surefire-reports/
 
-  # Dockerfile'ın bozulmadığını doğrular; main'e push'ta çalışır.
-  # Registry'ye push henüz YOK — deploy hedefi netleşince eklenecek
-  # (GHCR için: docker/login-action + docker/build-push-action).
   docker-build:
     runs-on: ubuntu-latest
     needs: build-and-test
@@ -44,3 +41,12 @@ jobs:
 
       - name: Build Docker image
         run: docker build -t marine-management:${{ github.sha }} .
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Deploy to Render
+        run: |
+          curl -f -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"

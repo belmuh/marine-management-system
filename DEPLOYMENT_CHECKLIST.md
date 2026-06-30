@@ -24,7 +24,7 @@ Kod incelemesinde tespit edilen, production'da doğrudan istismar edilebilecek s
 
 ### 1.3 Frontend Production URL (CRITICAL)
 
-- [ ] **`environment.prod.ts`** — `REPLACE_WITH_YOUR_API_DOMAIN` placeholder'ı gerçek production domain ile değiştirilmeli. `angular.json`'a `fileReplacements` eklendi (production build artık bu dosyayı kullanıyor).
+- [x] **`environment.prod.ts`** — `REPLACE_WITH_YOUR_API_DOMAIN` placeholder'ı gerçek production domain ile değiştirilmeli. `angular.json`'a `fileReplacements` eklendi (production build artık bu dosyayı kullanıyor).
 
 ---
 
@@ -90,7 +90,7 @@ Frontend (`index.html`) için de CSP meta tag veya Nginx header'ı eklenmelı.
 - [ ] Domain adı alındı ve DNS ayarları yapıldı
 - [ ] SSL/TLS sertifikası yapılandırıldı (HTTPS zorunlu)
 - [ ] Backend için reverse proxy yapılandırıldı (Nginx / Caddy)
-- [ ] PostgreSQL production instance kuruldu ve erişim test edildi
+- [x] PostgreSQL production instance kuruldu (Neon) — bağlantı henüz test edilmedi
 - [ ] Cloudflare R2 bucket oluşturuldu ve CORS ayarları yapıldı
 - [ ] Sunucu güvenlik duvarı kuralları yapılandırıldı (yalnızca 80, 443, SSH)
 - [ ] Nginx'de Angular SPA routing: `try_files $uri /index.html` yapılandırıldı
@@ -135,7 +135,7 @@ Frontend (`index.html`) için de CSP meta tag veya Nginx header'ı eklenmelı.
 
 ## 7. Frontend — Build & Deploy
 
-- [ ] `environment.prod.ts` → `apiUrl` gerçek production adresiyle güncellendi
+- [x] `environment.prod.ts` → `apiUrl` gerçek production adresiyle güncellendi (`api.maritar.com`)
 - [ ] `ng build --configuration production` başarılı (hata yok)
 - [ ] Bundle boyutu kontrol edildi (budget: initial < 500kB, max < 1MB)
 - [ ] Source map'ler production build'de dahil DEĞİL
