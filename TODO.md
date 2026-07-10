@@ -130,6 +130,21 @@ exceljs + chart.js ağır. 1 MB budget'ı aşma riski var. Lazy-load kontrolü y
 
 ---
 
+### [ ] P2-9 — Restore (soft delete geri alma) endpoint'i
+
+> Eklendi: 2026-07-08. Gerekçe: müşteri "yanlışlıkla sildik" dediğinde uygulama içinden anında geri alma. Yedekten dönmek multi-tenant'ta tek müşteri hatası için kullanılamaz (tüm tenant'lar geri gider).
+
+**Durum:** Altyapı hazır ama kullanılmıyor — `BaseAuditedEntity.restore()` ve `BaseTenantEntity.restore(User)` mevcut, **hiçbir servis/endpoint çağırmıyor**. Bugün geri alma ancak elle DB'de `is_deleted = false` ile mümkün.
+
+**Aksiyon:** `POST /api/finance/entries/{id}/restore` (öncelik: FinancialEntry; kategori vb. sonra).
+- Silinmiş kayda erişim için `@Where(is_deleted = false)` filtresini aşan native/`@Query` sorgu gerekir
+- **Tenant kontrolü şart** — silinmişe erişen sorgu tenant filter'ı da atlayabilir, `tenant_id` explicit doğrulanmalı
+- Yetki: CAPTAIN/SUPER_ADMIN (`@PreAuthorize`)
+- Envers zaten restore'u da loglar (`updated_by` set ediliyor)
+- Frontend: entry listesinde "silinenleri göster" + geri al butonu (ayrı iş olabilir)
+
+---
+
 ## 📋 MVP Sonrası (Kullanıcı Geri Bildirimine Göre)
 
 - [ ] Partial approve — frontend (backend `approvePartialAmount()` hazır, `ApproveEntryRequest`'e `approvedAmount` ekle)
