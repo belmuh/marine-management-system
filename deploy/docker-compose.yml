@@ -1,0 +1,102 @@
+# ═══════════════════════════════════════════════════════════════
+# Maritar — VPS production compose (Hetzner CX22, 4GB RAM)
+#
+# Kullanım (VPS'te):
+#   1. Bu klasörü sunucuya kopyala: deploy/ → /opt/maritar/
+#   2. cp .env.example .env → gerçek değerleri doldur
+#   3. docker compose up -d
+#
+# Bellek bütçesi (toplam 4GB + 2GB swap):
+#   backend  ≤ 2GB   (JVM heap 1.2GB, gerisi metaspace/stack)
+#   postgres ≤ 768MB (shared_buffers 256MB)
+#   caddy    ≤ 128MB
+#   kalan    ~1GB    → OS + Docker
+#
+# Frontend Cloudflare Pages'te — bu compose'a dahil DEĞİL (kasıtlı).
+# ═══════════════════════════════════════════════════════════════
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-marine_management}
+      POSTGRES_USER: ${DATABASE_USERNAME}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - max_connections=50
+      - -c
+      - effective_cache_size=512MB
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USERNAME} -d ${POSTGRES_DB:-marine_management}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+    # Port dışarı AÇILMAZ — sadece compose ağı içinden erişilir.
+    # pg_dump için: docker compose exec postgres pg_dump ...
+
+  backend:
+    # CI, imajı GHCR'a push'layacak (ci.yml güncellemesi ayrı iş).
+    # İlk kurulumda alternatif: git clone + `docker compose build backend`
+    # için build bloğunun yorumunu aç.
+    image: ghcr.io/belmuh/marine-management-system:latest
+    # build:
+    #   context: ..
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: "8080"
+      # prod'daki DATABASE_URL compose ağındaki postgres'i gösterir (.env'de)
+      JAVA_OPTS: >-
+        -Xms256m -Xmx1280m
+        -XX:MaxMetaspaceSize=256m
+        -XX:+UseSerialGC
+        -XX:+ExitOnOutOfMemoryError
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    deploy:
+      resources:
+        limits:
+          memory: 2048M
+    # Port dışarı AÇILMAZ — TLS'i Caddy karşılar, backend'e compose ağından geçer.
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

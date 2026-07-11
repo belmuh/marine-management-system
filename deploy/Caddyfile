@@ -1,0 +1,21 @@
+# Maritar — Caddy reverse proxy
+# TLS sertifikası (Let's Encrypt) otomatik alınır ve yenilenir.
+#
+# ÖNEMLİ: Cloudflare proxy'si (turuncu bulut) açıkken Let's Encrypt HTTP
+# doğrulaması sorunsuz çalışır; cutover sırasında DNS önce "DNS only" (gri)
+# yapılıp sertifika alındıktan sonra proxy tekrar açılabilir — checklist notu.
+
+api.maritar.com {
+	encode gzip
+
+	# Güvenlik başlıkları (frontend nginx'tekiyle uyumlu)
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	reverse_proxy backend:8080
+}
