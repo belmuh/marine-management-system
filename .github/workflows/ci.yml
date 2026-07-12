@@ -31,22 +31,65 @@ jobs:
           name: test-reports
           path: target/surefire-reports/
 
-  docker-build:
+  docker-publish:
     runs-on: ubuntu-latest
     needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/belmuh/marine-management-system:latest
+            ghcr.io/belmuh/marine-management-system:${{ github.sha }}
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: docker-publish
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build Docker image
-        run: docker build -t marine-management:${{ github.sha }} .
+      # Config de pipeline'dan akar: repo'daki compose + Caddyfile sunucuya
+      # kopyalanır. .env'e DOKUNULMAZ — o sadece sunucuda durur.
+      - name: Sync deploy configs to VPS
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "deploy/docker-compose.yml,deploy/Caddyfile"
+          target: /opt/maritar
+          strip_components: 1
 
-  deploy:
-    runs-on: ubuntu-latest
-    needs: docker-build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - name: Deploy to Render
-        run: |
-          curl -f -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+      - name: Deploy to VPS (docker compose pull & up)
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd /opt/maritar
+            docker compose pull backend
+            docker compose up -d
+            # Caddyfile bind-mount: dosya değişse de Caddy kendiliğinden
+            # yeniden okumaz → graceful reload (kesintisiz). Konteyner zaten
+            # yeni oluştuysa reload gereksizdir, hata deploy'u bozmasın.
+            docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile || true
+            docker image prune -f
