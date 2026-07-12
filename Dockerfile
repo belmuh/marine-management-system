@@ -20,6 +20,10 @@ RUN ./mvnw -B package -DskipTests
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 
+# Healthcheck için curl (temurin-jre imajında yok) — root iken kurulmalı
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Root olmayan kullanıcı (güvenlik)
 RUN useradd --system --uid 1001 appuser
 USER appuser

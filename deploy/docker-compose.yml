@@ -15,10 +15,19 @@
 # Frontend Cloudflare Pages'te — bu compose'a dahil DEĞİL (kasıtlı).
 # ═══════════════════════════════════════════════════════════════
 
+# Ağ segmentasyonu: Caddy DB'ye erişemez (lateral movement engeli).
+#   frontend_network → caddy ↔ backend
+#   backend_network  → backend ↔ postgres
+networks:
+  frontend_network:
+  backend_network:
+
 services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    networks:
+      - backend_network
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-marine_management}
       POSTGRES_USER: ${DATABASE_USERNAME}
@@ -54,6 +63,9 @@ services:
     # build:
     #   context: ..
     restart: unless-stopped
+    networks:
+      - frontend_network
+      - backend_network
     env_file: .env
     environment:
       SPRING_PROFILES_ACTIVE: prod
@@ -68,7 +80,9 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP"]
+      # curl -f: actuator DOWN'da 503 döner → sıfır-dışı exit → unhealthy.
+      # curl, Dockerfile'da runtime imajına kuruludur (temurin-jre'de yok).
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -82,6 +96,8 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    networks:
+      - frontend_network
     ports:
       - "80:80"
       - "443:443"
