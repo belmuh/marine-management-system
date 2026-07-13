@@ -1,6 +1,6 @@
 # Yapılacaklar — Maritar Canlı Çıkış Listesi
 
-> Son güncelleme: 2026-06-28 (kod analizi doğrulamasıyla yeniden düzenlendi)
+> Son güncelleme: 2026-07-13 (VPS geçişi bölümü eklendi)
 > **Tek kaynak:** Bu dosya tüm yapılacakların master listesidir. CLAUDE.md "Pending" bölümü buraya taşındı.
 > Kaynak: TODO.md + LAUNCH_CHECKLIST.md + CLAUDE.md Pending + kod analizi (birleştirildi, tamamlananlar altta).
 
@@ -15,6 +15,42 @@ Bunlar kapanmadan canlıya çıkma. **Hepsi tamamlandı** — detaylar "Tamamlan
 ⏸️ **Şu an gündemde değil — pilot öncesi tekrar değerlendir.**
 
 Backend endpoint açık (`/api/files/import`), frontend tarafı yapılmadı. Pilot kullanıcılar bu feature'ı kullanmayacaksa blocker değil; kullanacaksa pilot öncesi tamamlanmalı.
+
+---
+
+## 🟠 VPS Geçişi — Render/Neon → Hetzner (devam ediyor)
+
+> Durum (2026-07-13): VPS'te uygulama ayakta ve healthy (backend + postgres + caddy,
+> ağ segmentasyonlu). CI push→VPS deploy zinciri uçtan uca çalışıyor. Trafik hâlâ
+> Render'da, VPS DB'si boş (seed + SYSTEM tenant). Üretim etkilenmiyor.
+
+### [ ] V1 — Restore provası (RTO ölçümü + migration provası)
+
+R2'deki Neon yedeğini (`db-backups/`) VPS postgres'ine restore et.
+- Süreyi ölç ve buraya not et (RTO) — "yedekten dönebiliyor muyum" sorusunun ilk gerçek cevabı
+- Restore sonrası smoke: login, entry listesi, tenant izolasyonu spot check
+- Dikkat: VPS DB'sindeki bootstrap verisi (SYSTEM tenant) ile çakışma — restore öncesi DB'yi sıfırla (`docker compose down postgres` + volume sil) veya ayrı DB'ye al
+- Bu prova aynı zamanda DNS cutover'daki veri taşıma adımının birebir provasıdır
+
+### [ ] V2 — DNS cutover (planlı, prova başarılıysa)
+
+Sırasıyla:
+1. Bakım penceresi seç, pilot kullanıcılara bildir (varsa)
+2. Son Neon yedeğini al (backup.yml'i elle tetikle veya `pg_dump`)
+3. VPS'e restore et (V1 provasındaki adımlarla)
+4. Cloudflare'de `api.maritar.com` → önce "DNS only" (gri bulut), VPS IP'sine çevir
+5. Caddy Let's Encrypt sertifikayı alsın (`docker compose logs caddy` izle)
+6. Sertifika alınınca Cloudflare proxy (turuncu bulut) tekrar aç
+7. Smoke check (aşağıdaki "Deploy Günü Final Smoke Check")
+8. Sorunsuzsa: Render servisini durdur (silme — 1 hafta rollback payı), Neon'u readonly bırak
+9. 1 hafta sorunsuz geçince: Render/Neon kapat, backup.yml'i VPS postgres'ini yedekleyecek şekilde güncelle (kritik — yoksa yedeksiz kalırız!)
+
+**Rollback:** DNS'i Render'a geri çevir (TTL düşük tut) — Neon'daki veri cutover anına kadar güncel.
+
+### [ ] V3 — Deploy'da `latest` yerine commit SHA tag'i
+
+`ci.yml` deploy adımı `latest` çekiyor; rollback belirsiz. GHCR'a zaten SHA tag'i push'lanıyor —
+compose'a `IMAGE_TAG` env geçirip deploy'da SHA kullan. P1-6 (release versiyonlama) ile birleşebilir.
 
 ---
 
@@ -186,6 +222,13 @@ Pilot kullanıcılar login atmadan önce sırasıyla yap:
 ---
 
 ## ✅ Tamamlananlar
+
+### 2026-07-13 (VPS geçişi — altyapı ayağı)
+- [x] **Backend healthcheck bug'ı** → compose `wget` kullanıyordu ama `temurin-jre` imajında wget yok; healthcheck hiç geçmiyordu. `curl`'e çevrildi, curl Dockerfile'a eklendi, `start_period: 90s` korundu (commit `3b82f36`)
+- [x] **Ağ segmentasyonu** → `frontend_network` (caddy↔backend) + `backend_network` (backend↔postgres); Caddy artık DB'ye erişemiyor. Sunucuda doğrulandı: dışa açık portlar sadece 80/443
+- [x] **CI deploy hedefi Render→VPS** → `12d1101`: scp ile compose+Caddyfile senkronu + `docker compose pull & up` + Caddy graceful reload. Secrets: `VPS_HOST`, `VPS_SSH_KEY` (CI'a özel `maritar_ci` anahtarı)
+- [x] **Prod `.env` VPS'e kuruldu** → dev'den ayrı taze secret'lar (DB şifresi, JWT, admin şifresi), `SENTRY_DSN` düzeltmesi (dev'deki `sentry.dsn` formatı prod'da `SENTRY_DSN` bekleniyordu — açılış crash'inin sebebiydi)
+- [x] **VPS'te uygulama healthy** → backend 13.9s'de açıldı, Flyway + seed + SYSTEM bootstrap tamam. CI #36 uçtan uca yeşil
 
 ### 2026-06-28 (kod analizi doğrulaması — açık sanılıp aslında bitmiş olanlar)
 - [x] **P1-1 — `console.log` temizliği** → `LoggerService` pattern uygulandı. Kodda kalan 4 `console.*` meşru (LoggerService'in kendi içi + `main.ts` bootstrap catch). İsteğe bağlı: `angular.json`'a `drop_console` terser ayarı eklenebilir (zorunlu değil).
