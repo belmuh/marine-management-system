@@ -22,30 +22,35 @@ Backend endpoint açık (`/api/files/import`), frontend tarafı yapılmadı. Pil
 
 > Durum (2026-07-13): VPS'te uygulama ayakta ve healthy (backend + postgres + caddy,
 > ağ segmentasyonlu). CI push→VPS deploy zinciri uçtan uca çalışıyor. Trafik hâlâ
-> Render'da, VPS DB'si boş (seed + SYSTEM tenant). Üretim etkilenmiyor.
+> Render'da. **Karar:** Neon verisi taşınmayacak — VPS temiz DB ile sıfırdan başlayacak.
+> As-built dokümantasyon: `DEPLOYMENT_GUIDE.md` Bölüm 17
 
-### [ ] V1 — Restore provası (RTO ölçümü + migration provası)
+### [ ] V1 — VPS yedeklemesi + restore provası (cutover ÖNCESİ şart)
 
-R2'deki Neon yedeğini (`db-backups/`) VPS postgres'ine restore et.
-- Süreyi ölç ve buraya not et (RTO) — "yedekten dönebiliyor muyum" sorusunun ilk gerçek cevabı
-- Restore sonrası smoke: login, entry listesi, tenant izolasyonu spot check
-- Dikkat: VPS DB'sindeki bootstrap verisi (SYSTEM tenant) ile çakışma — restore öncesi DB'yi sıfırla (`docker compose down postgres` + volume sil) veya ayrı DB'ye al
-- Bu prova aynı zamanda DNS cutover'daki veri taşıma adımının birebir provasıdır
+Sıfırdan başlama kararıyla asıl risk değişti: cutover sonrası gerçek veri VPS postgres'inde
+olacak ama **onu yedekleyen hiçbir şey yok** (backup.yml hâlâ Neon'u yedekliyor).
 
-### [ ] V2 — DNS cutover (planlı, prova başarılıysa)
+1. `backup.yml`'i VPS postgres'ini yedekleyecek şekilde güncelle
+   (SSH ile `docker compose exec postgres pg_dump` → gzip → R2 `db-backups/`; Neon secret'ı yerine VPS erişimi)
+2. İlk yedeğin R2'ye düştüğünü doğrula
+3. **Restore provası:** yedeği boş bir DB'ye restore et, süreyi ölç ve buraya not et (RTO)
+   - Prova için VPS'te geçici ikinci DB veya lokal Docker yeterli; canlı `pgdata`'ya dokunma
+   - Restore sonrası smoke: login + entry listesi
 
-Sırasıyla:
-1. Bakım penceresi seç, pilot kullanıcılara bildir (varsa)
-2. Son Neon yedeğini al (backup.yml'i elle tetikle veya `pg_dump`)
-3. VPS'e restore et (V1 provasındaki adımlarla)
-4. Cloudflare'de `api.maritar.com` → önce "DNS only" (gri bulut), VPS IP'sine çevir
-5. Caddy Let's Encrypt sertifikayı alsın (`docker compose logs caddy` izle)
-6. Sertifika alınınca Cloudflare proxy (turuncu bulut) tekrar aç
-7. Smoke check (aşağıdaki "Deploy Günü Final Smoke Check")
-8. Sorunsuzsa: Render servisini durdur (silme — 1 hafta rollback payı), Neon'u readonly bırak
-9. 1 hafta sorunsuz geçince: Render/Neon kapat, backup.yml'i VPS postgres'ini yedekleyecek şekilde güncelle (kritik — yoksa yedeksiz kalırız!)
+### [ ] V2 — DNS cutover (veri taşıma YOK — sadeleşti)
 
-**Rollback:** DNS'i Render'a geri çevir (TTL düşük tut) — Neon'daki veri cutover anına kadar güncel.
+Ön koşul: V1 tamam (yedekleme çalışıyor + restore kanıtlı).
+
+1. Cloudflare'de `api.maritar.com` → önce "DNS only" (gri bulut), VPS IP'sine (91.98.37.251) çevir — TTL düşük tut
+2. Caddy Let's Encrypt sertifikayı alsın (`docker compose logs -f caddy` izle)
+3. Sertifika alınınca Cloudflare proxy (turuncu bulut) tekrar aç
+4. Smoke check (aşağıdaki "Deploy Günü Final Smoke Check") — CORS dahil
+5. Sorunsuzsa: Render servisini durdur (silme — 1 hafta rollback payı)
+6. 1 hafta sorunsuz geçince: Render + Neon kapat; `NEON_DATABASE_URL` ve `RENDER_DEPLOY_HOOK_URL` secret'larını sil
+
+**Rollback:** DNS'i Render'a geri çevir. Not: sıfırdan başlandığı için rollback,
+VPS'te bu arada oluşan veriyi Render/Neon tarafında GÖRMEZ — cutover sonrası
+oluşan veri kaybolmasın istiyorsan rollback penceresini kısa tut.
 
 ### [ ] V3 — Deploy'da `latest` yerine commit SHA tag'i
 
