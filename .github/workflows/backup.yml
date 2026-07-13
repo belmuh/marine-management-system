@@ -1,47 +1,62 @@
-name: DB Backup — Neon → R2
+name: DB Backup → R2
 
 # Her gece 02:00 UTC'de otomatik çalışır.
 # Manuel tetikleme: Actions sekmesi → "DB Backup" → Run workflow
+#
+# İki kaynak (geçiş dönemi):
+#   vps-backup  → VPS postgres (cutover sonrası tek kaynak bu olacak)
+#   neon-backup → Neon (trafik hâlâ Render'da; cutover'a kadar prod verisi
+#                 burada). V2 adım 6'da secret temizliğiyle birlikte SİL.
 on:
   schedule:
     - cron: '0 2 * * *'
   workflow_dispatch:
 
 jobs:
-  backup:
-    name: pg_dump → Cloudflare R2
+  vps-backup:
+    name: VPS pg_dump → Cloudflare R2
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
-      - name: postgresql-client kur
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y postgresql-client
-
       - name: AWS CLI kur (R2, S3-uyumlu)
         run: pip install awscli --quiet
 
-      - name: pg_dump al ve sıkıştır
+      - name: SSH anahtarini hazirla
         env:
-          # Neon bağlantı stringi: PostgreSQL formatında (JDBC değil)
-          # Örnek: postgresql://user:pass@ep-xxx.eu-central-1.aws.neon.tech/dbname?sslmode=require
-          # GitHub → Settings → Secrets → Actions → NEON_DATABASE_URL
-          DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
         run: |
-          FILENAME="backup-$(date -u +%Y%m%d-%H%M%S).sql.gz"
+          mkdir -p ~/.ssh
+          echo "$VPS_SSH_KEY" > ~/.ssh/vps_key
+          chmod 600 ~/.ssh/vps_key
+
+      - name: pg_dump al (SSH stream) ve sikistir
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          set -euo pipefail
+          FILENAME="backup-vps-$(date -u +%Y%m%d-%H%M%S).sql.gz"
           echo "Backup dosyası: $FILENAME"
-          pg_dump "$DATABASE_URL" \
-            --no-password \
-            --verbose \
-            --format=plain \
-            --no-owner \
-            --no-privileges \
-          | gzip > "$FILENAME"
+
+          # Credential'lar konteynerin kendi env'inden ($POSTGRES_USER/$POSTGRES_DB)
+          # gelir — runner'a DB şifresi taşınmaz. -T şart: TTY binary stream'i bozar.
+          ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=accept-new \
+            deploy@"$VPS_HOST" \
+            "cd /opt/maritar && docker compose exec -T postgres sh -c 'pg_dump -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" --no-owner --no-privileges'" \
+            | gzip > "$FILENAME"
+
+          # pg_dump pipe içinde fail ederse pipefail yakalar; yine de boş/truncated
+          # dosyaya karşı minimum boyut kontrolü (şema tek başına >1KB üretir).
+          SIZE=$(stat -c%s "$FILENAME")
+          if [ "$SIZE" -lt 1024 ]; then
+            echo "HATA: yedek şüpheli derecede küçük (${SIZE} bayt)"
+            exit 1
+          fi
+
           echo "BACKUP_FILE=$FILENAME" >> $GITHUB_ENV
           ls -lh "$FILENAME"
 
-      - name: R2'ye yükle
+      - name: R2'ye yukle
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_KEY }}
@@ -54,7 +69,9 @@ jobs:
             --region auto
           echo "Yüklendi: s3://${R2_BUCKET}/db-backups/${BACKUP_FILE}"
 
-      - name: 30 günden eski yedekleri sil
+      # Temizlik kasıtlı olarak SADECE başarılı VPS yedeği sonrası çalışır:
+      # yeni yedek alınamıyorsa eskileri silme.
+      - name: 30 gunden eski yedekleri sil
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_KEY }}
@@ -84,4 +101,49 @@ jobs:
 
       - name: Basari ozeti
         run: |
-          echo "Backup tamamlandi: $BACKUP_FILE - sonraki calisma: yarin 02:00 UTC"
+          echo "VPS backup tamamlandi: $BACKUP_FILE - sonraki calisma: yarin 02:00 UTC"
+
+  # ── GEÇİCİ: cutover'a kadar Neon hâlâ prod ──────────────────────────
+  # V2 adım 6'da bu job'ı NEON_DATABASE_URL secret'ıyla birlikte sil.
+  neon-backup:
+    name: Neon pg_dump → Cloudflare R2 (geçici)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: postgresql-client kur
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client
+
+      - name: AWS CLI kur (R2, S3-uyumlu)
+        run: pip install awscli --quiet
+
+      - name: pg_dump al ve sikistir
+        env:
+          # Neon bağlantı stringi: PostgreSQL formatında (JDBC değil)
+          DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          FILENAME="backup-neon-$(date -u +%Y%m%d-%H%M%S).sql.gz"
+          echo "Backup dosyası: $FILENAME"
+          pg_dump "$DATABASE_URL" \
+            --no-password \
+            --no-owner \
+            --no-privileges \
+          | gzip > "$FILENAME"
+          echo "BACKUP_FILE=$FILENAME" >> $GITHUB_ENV
+          ls -lh "$FILENAME"
+
+      - name: R2'ye yukle
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BACKUP_BUCKET }}
+        run: |
+          aws s3 cp "$BACKUP_FILE" \
+            "s3://${R2_BUCKET}/db-backups/${BACKUP_FILE}" \
+            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+            --region auto
+          echo "Yüklendi: s3://${R2_BUCKET}/db-backups/${BACKUP_FILE}"
