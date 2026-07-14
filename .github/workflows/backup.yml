@@ -111,10 +111,14 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - name: postgresql-client kur
+      - name: postgresql-client 18 kur (PGDG)
+        # Ubuntu'nun kendi paketi client 16 — Neon sunucusu 18.4'e yükseldi,
+        # pg_dump kendinden yeni sunucuyu reddeder → PGDG deposundan 18 kur.
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y postgresql-client
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-18
 
       - name: AWS CLI kur (R2, S3-uyumlu)
         run: pip install awscli --quiet
