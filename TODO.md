@@ -186,6 +186,15 @@ exceljs + chart.js ağır. 1 MB budget'ı aşma riski var. Lazy-load kontrolü y
 
 ---
 
+### [ ] P2-10 — Spring Boot 4.1 migration
+
+> Eklendi: 2026-07-14. Sürüm denetimi bulgusu: 3.5 hattı 2026-06-30'da OSS EOL oldu.
+> Son patch olan 3.5.16'ya çekildi (güvenlik açığı kapandı) ama bundan sonra 3.5'e CVE yaması **gelmeyecek**.
+
+**Aksiyon:** Spring Boot 4.1'e (Spring Framework 7) migration planla — major iş, cutover/pilot sonrası. Testcontainers pin'i (`1.21.4`) 4.1 BOM'unda gereksizleşiyor olabilir, birlikte gözden geçir.
+
+---
+
 ## 📋 MVP Sonrası (Kullanıcı Geri Bildirimine Göre)
 
 - [ ] Partial approve — frontend (backend `approvePartialAmount()` hazır, `ApproveEntryRequest`'e `approvedAmount` ekle)
@@ -198,6 +207,7 @@ exceljs + chart.js ağır. 1 MB budget'ı aşma riski var. Lazy-load kontrolü y
 - [ ] Sefer/charter etiketi (sefer bazlı maliyet takibi)
 - [ ] `EntryStatus` ikiye bölme (`approvalStatus` × `paymentStatus`) — iade/fazla ödeme gelirse
 - [ ] `switchTenant()` ölü kodunu frontend'den sil
+- [ ] Angular 20 → 21/22 bump (v20 aktif desteği Kasım 2026'ya kadar; acil değil)
 
 ---
 

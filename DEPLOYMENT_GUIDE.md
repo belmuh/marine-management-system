@@ -697,7 +697,7 @@ Hepsi yeşil → pilot kullanıcılara giriş bilgileri gönder.
 |---|---|---|
 | Trafik | `api.maritar.com` DNS'i **burayı** gösteriyor | Henüz trafik yok |
 | Backend | Render.com (free tier, cold start ~30 sn) | Hetzner CX22, Docker Compose |
-| Veritabanı | Neon Postgres (Frankfurt) | VPS içinde postgres:16 konteyneri |
+| Veritabanı | Neon Postgres (Frankfurt) | VPS içinde postgres:18 konteyneri |
 | Veri | Eski test verisi (taşınmayacak — **sıfırdan başlama kararı**, 2026-07-13) | Temiz DB + seed + SYSTEM tenant |
 | CI deploy | ❌ Artık pipeline'dan güncelleme almıyor (12d1101 ile kesildi) | ✅ Her `git push origin main` otomatik deploy |
 
@@ -768,7 +768,7 @@ Detaylı kurulum adımları ve free-tier sınırları: yukarıdaki Bölüm 1–8
                  └─────┬─────┘  JVM: -Xmx1280m, SerialGC · limit 2 GB
         backend_network │       healthcheck: curl → /actuator/health (start_period 90s)
                  ┌─────▼─────┐
-                 │ postgres  │  postgres:16-alpine · limit 768 MB
+                 │ postgres  │  postgres:18-alpine · limit 768 MB
                  └───────────┘  veri: `pgdata` Docker volume
 ```
 

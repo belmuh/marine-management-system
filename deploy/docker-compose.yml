@@ -24,7 +24,11 @@ networks:
 
 services:
   postgres:
-    image: postgres:16-alpine
+    # 18: Neon (18.4) ve Testcontainers (18-alpine) ile hizalı.
+    # DİKKAT: 18 imajında PGDATA /var/lib/postgresql/18/docker'a taşındı,
+    # VOLUME artık /var/lib/postgresql — eski /data mount'u SESSİZCE volume
+    # dışına yazar (docker-library/postgres#1370).
+    image: postgres:18-alpine
     restart: unless-stopped
     networks:
       - backend_network
@@ -41,7 +45,7 @@ services:
       - -c
       - effective_cache_size=512MB
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USERNAME} -d ${POSTGRES_DB:-marine_management}"]
       interval: 10s
