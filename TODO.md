@@ -1,6 +1,6 @@
 # Yapılacaklar — Maritar Canlı Çıkış Listesi
 
-> Son güncelleme: 2026-07-13 (VPS geçişi bölümü eklendi)
+> Son güncelleme: 2026-07-14 (kod denetimi: P2-3 + switchTenant tamamlanmış çıktı; V4 eklendi)
 > **Tek kaynak:** Bu dosya tüm yapılacakların master listesidir. CLAUDE.md "Pending" bölümü buraya taşındı.
 > Kaynak: TODO.md + LAUNCH_CHECKLIST.md + CLAUDE.md Pending + kod analizi (birleştirildi, tamamlananlar altta).
 
@@ -57,6 +57,24 @@ oluşan veri kaybolmasın istiyorsan rollback penceresini kısa tut.
 `ci.yml` deploy adımı `latest` çekiyor; rollback belirsiz. GHCR'a zaten SHA tag'i push'lanıyor —
 compose'a `IMAGE_TAG` env geçirip deploy'da SHA kullan. P1-6 (release versiyonlama) ile birleşebilir.
 
+### [ ] V4 — VPS sertleştirme (kalanlar)
+
+> Denetim (2026-07-14, sunucuda doğrulandı): SSH root login + şifre girişi kapalı ✓,
+> unattended-upgrades aktif ✓, ufw aktif (22/80/443) ✓, dışa açık port yok (Docker publish
+> sadece Caddy 80/443) ✓, ağ segmentasyonu ✓, CI'a özel iptal edilebilir SSH anahtarı ✓.
+
+Kalan işler (hiçbiri cutover engeli değil):
+
+1. **`deploy` yetki ayrımı** — docker grubu + sudo = CI anahtarı sızarsa root eşdeğeri.
+   CI'ın tek ihtiyacı `docker compose` — sudo'yu kaldırmayı veya CI için kısıtlı ayrı
+   kullanıcıyı değerlendir.
+2. **Origin IP kısıtlaması (cutover SONRASI, V2'ye bağlı)** — Cloudflare proxy açılınca
+   80/443'ü Cloudflare IP aralıklarına kısıtla; yoksa WAF/DDoS katmanı IP'den bypass edilir.
+3. **fail2ban** (opsiyonel) — SSH zaten key-only; brute-force gürültüsünü keser, acil değil.
+4. **Not:** ufw kuralları Docker'ın publish ettiği portları KAPSAMAZ (Docker iptables'ı
+   önden yazar) — ileride compose'a port ekleyen olursa ufw'ye güvenme; Hetzner Cloud
+   Firewall (Console'dan, sunucudan bağımsız) daha sağlam ikinci katman olur.
+
 ---
 
 ## 🟡 P1 — İlk Hafta İçinde
@@ -71,11 +89,11 @@ compose'a `IMAGE_TAG` env geçirip deploy'da SHA kullan. P1-6 (release versiyonl
 
 ### [ ] P1-6 — Release versiyonlama + rollback planı
 
-**Aksiyon:**
-```bash
-git tag v0.1.0-pilot.1
-```
-Docker image'i aynı tag'la işaretle. Önceki sürüme rollback tek komutla yapılabilmeli — bunu belgele. Pilot döneminde DB migration'ları forward-only; rollback gerekirse snapshot restore.
+> Kod denetimi (2026-07-14): `v0.1.0-pilot.1` tag'i oluşturulmuş ve remote'a push'lanmış ✓.
+> Kalan: Docker imajını tag'la işaretlemek + rollback prosedürünü belgelemek — **V3 ile birleştir**
+> (SHA tag deploy zaten rollback mekanizmasının kendisi).
+
+Pilot döneminde DB migration'ları forward-only; rollback gerekirse snapshot restore.
 
 ---
 
@@ -122,17 +140,6 @@ Sonra `SecurityConfig`'teki uzun `hasAnyRole(...)` listelerini sadeleştir.
 ### [ ] P2-2 — Domain → application bağımlılık ihlalini düzelt
 
 `FinancialEntry.calculateBaseAmount(ExchangeRateService, ...)` domain'den application katmanını çağırıyor. Domain'de `ExchangeRateProvider` interface tanımla, `application.ExchangeRateService` bunu implement etsin.
-
----
-
-### [ ] P2-3 — Dev profilinde Flyway'i aç
-
-`application-dev.properties`:
-```properties
-spring.flyway.enabled=true
-spring.jpa.hibernate.ddl-auto=validate
-```
-"Bende çalışıyor" sendromunu önler; dev'de schema drift erken yakalanır.
 
 ---
 
@@ -206,7 +213,6 @@ exceljs + chart.js ağır. 1 MB budget'ı aşma riski var. Lazy-load kontrolü y
 - [ ] WHO filtresini yumuşat ("alakalılar üstte + tümünü göster")
 - [ ] Sefer/charter etiketi (sefer bazlı maliyet takibi)
 - [ ] `EntryStatus` ikiye bölme (`approvalStatus` × `paymentStatus`) — iade/fazla ödeme gelirse
-- [ ] `switchTenant()` ölü kodunu frontend'den sil
 - [ ] Angular 20 → 21/22 bump (v20 aktif desteği Kasım 2026'ya kadar; acil değil)
 
 ---
@@ -237,6 +243,14 @@ Pilot kullanıcılar login atmadan önce sırasıyla yap:
 ---
 
 ## ✅ Tamamlananlar
+
+### 2026-07-14 (sürüm denetimi + kod analizi doğrulaması)
+- [x] **Spring Boot 3.5.7 → 3.5.16** → 3.5 hattı 2026-06-30'da OSS EOL; son patch'e çekildi, 148 test yeşil. 4.1 migration ayrı iş: P2-10
+- [x] **VPS postgres 16 → 18-alpine** → Neon (18.4) + Testcontainers (18) ile hizalandı; 18 imajının PGDATA/volume değişikliğine uyum (`pgdata:/var/lib/postgresql`), volume'da veri doğrulandı (`18/` klasörü). DB boşken yapıldı, veri kaybı yok
+- [x] **backup.yml VPS'e çevrildi (V1 madde 1-2)** → vps-backup job'ı SSH stream ile `docker compose exec pg_dump`; Neon job'ı cutover'a kadar geçici tutuldu. Bulgu: Neon PG 18.4'e yükselmiş, client 16 sürüm uyuşmazlığı pipefail olmadığından **sessizce** yeşil görünüyordu — PGDG client-18 ile düzeltildi. Kalan: restore provası (V1 madde 3, bekletiliyor)
+- [x] **P2-3 — Dev profilinde Flyway** → kod kontrolü: `application-dev.properties`'te `spring.flyway.enabled=true` + `ddl-auto=validate` zaten mevcut
+- [x] **`switchTenant()` ölü kodu** → kod kontrolü: frontend'de hiç geçmiyor, zaten silinmiş
+- [x] **VPS güvenlik denetimi** → SSH (root+şifre kapalı), unattended-upgrades, ufw doğrulandı; kalanlar V4'te
 
 ### 2026-07-13 (VPS geçişi — altyapı ayağı)
 - [x] **Backend healthcheck bug'ı** → compose `wget` kullanıyordu ama `temurin-jre` imajında wget yok; healthcheck hiç geçmiyordu. `curl`'e çevrildi, curl Dockerfile'a eklendi, `start_period: 90s` korundu (commit `3b82f36`)
