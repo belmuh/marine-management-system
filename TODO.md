@@ -28,12 +28,13 @@ Backend endpoint açık (`/api/files/import`), frontend tarafı yapılmadı. Pil
 ### [ ] V1 — VPS yedeklemesi + restore provası (cutover ÖNCESİ şart)
 
 Sıfırdan başlama kararıyla asıl risk değişti: cutover sonrası gerçek veri VPS postgres'inde
-olacak ama **onu yedekleyen hiçbir şey yok** (backup.yml hâlâ Neon'u yedekliyor).
+olacak, onu yedekleyen mekanizma hazır ama henüz doğrulanmadı.
 
-1. `backup.yml`'i VPS postgres'ini yedekleyecek şekilde güncelle
+1. [x] `backup.yml`'i VPS postgres'ini yedekleyecek şekilde güncelle
    (SSH ile `docker compose exec postgres pg_dump` → gzip → R2 `db-backups/`; Neon secret'ı yerine VPS erişimi)
-2. İlk yedeğin R2'ye düştüğünü doğrula
-3. **Restore provası:** yedeği boş bir DB'ye restore et, süreyi ölç ve buraya not et (RTO)
+   — 2026-07-15: Neon job'ı da (geçici tutulan `neon-backup`) tamamen kaldırıldı, tek kaynak VPS postgres.
+2. [ ] İlk yedeğin R2'ye düştüğünü doğrula (Actions sekmesi → "DB Backup" → son çalışma yeşil mi + R2 bucket'ta `db-backups/` altında dosya var mı)
+3. [ ] **Restore provası:** yedeği boş bir DB'ye restore et, süreyi ölç ve buraya not et (RTO)
    - Prova için VPS'te geçici ikinci DB veya lokal Docker yeterli; canlı `pgdata`'ya dokunma
    - Restore sonrası smoke: login + entry listesi
 
@@ -243,6 +244,9 @@ Pilot kullanıcılar login atmadan önce sırasıyla yap:
 ---
 
 ## ✅ Tamamlananlar
+
+### 2026-07-15
+- [x] **`neon-backup` job'ı backup.yml'den tamamen kaldırıldı** → Neon'daki veri sıfırdan başlama kararıyla zaten taşınmayacaktı (test verisi); job haftalardır PG 18 uyuşmazlığı yüzünden geçerli yedek üretmiyordu. Tek kaynak artık VPS postgres. `NEON_DATABASE_URL` secret'ı V2 madde 6'da (cutover + 1 hafta sonra) silinecek — Neon veritabanı servisinin kendisi de o adımda kapatılacak, rollback penceresi için şimdi kapatılmıyor.
 
 ### 2026-07-14 (sürüm denetimi + kod analizi doğrulaması)
 - [x] **Spring Boot 3.5.7 → 3.5.16** → 3.5 hattı 2026-06-30'da OSS EOL; son patch'e çekildi, 148 test yeşil. 4.1 migration ayrı iş: P2-10

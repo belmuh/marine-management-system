@@ -3,10 +3,9 @@ name: DB Backup → R2
 # Her gece 02:00 UTC'de otomatik çalışır.
 # Manuel tetikleme: Actions sekmesi → "DB Backup" → Run workflow
 #
-# İki kaynak (geçiş dönemi):
-#   vps-backup  → VPS postgres (cutover sonrası tek kaynak bu olacak)
-#   neon-backup → Neon (trafik hâlâ Render'da; cutover'a kadar prod verisi
-#                 burada). V2 adım 6'da secret temizliğiyle birlikte SİL.
+# Tek kaynak: VPS postgres. (Neon job'ı 2026-07-15'te kaldırıldı — Neon verisi
+# taşınmayacak test verisiydi; zaten PG 18 uyuşmazlığı nedeniyle haftalardır
+# geçerli yedek üretmiyordu.)
 on:
   schedule:
     - cron: '0 2 * * *'
@@ -102,52 +101,3 @@ jobs:
       - name: Basari ozeti
         run: |
           echo "VPS backup tamamlandi: $BACKUP_FILE - sonraki calisma: yarin 02:00 UTC"
-
-  # ── GEÇİCİ: cutover'a kadar Neon hâlâ prod ──────────────────────────
-  # V2 adım 6'da bu job'ı NEON_DATABASE_URL secret'ıyla birlikte sil.
-  neon-backup:
-    name: Neon pg_dump → Cloudflare R2 (geçici)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: postgresql-client 18 kur (PGDG)
-        # Ubuntu'nun kendi paketi client 16 — Neon sunucusu 18.4'e yükseldi,
-        # pg_dump kendinden yeni sunucuyu reddeder → PGDG deposundan 18 kur.
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y postgresql-common
-          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
-          sudo apt-get install -y postgresql-client-18
-
-      - name: AWS CLI kur (R2, S3-uyumlu)
-        run: pip install awscli --quiet
-
-      - name: pg_dump al ve sikistir
-        env:
-          # Neon bağlantı stringi: PostgreSQL formatında (JDBC değil)
-          DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
-        run: |
-          set -euo pipefail
-          FILENAME="backup-neon-$(date -u +%Y%m%d-%H%M%S).sql.gz"
-          echo "Backup dosyası: $FILENAME"
-          pg_dump "$DATABASE_URL" \
-            --no-password \
-            --no-owner \
-            --no-privileges \
-          | gzip > "$FILENAME"
-          echo "BACKUP_FILE=$FILENAME" >> $GITHUB_ENV
-          ls -lh "$FILENAME"
-
-      - name: R2'ye yukle
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_KEY }}
-          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-          R2_BUCKET: ${{ secrets.R2_BACKUP_BUCKET }}
-        run: |
-          aws s3 cp "$BACKUP_FILE" \
-            "s3://${R2_BUCKET}/db-backups/${BACKUP_FILE}" \
-            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
-            --region auto
-          echo "Yüklendi: s3://${R2_BUCKET}/db-backups/${BACKUP_FILE}"
